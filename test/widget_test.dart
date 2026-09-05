@@ -1,30 +1,29 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:warungku/main.dart';
+import 'package:intl/date_symbol_data_local.dart';
+import 'package:warungku/core/utils/formatters.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  setUpAll(() async {
+    await initializeDateFormatting('id_ID', null);
+  });
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+  group('Formatters Unit Tests', () {
+    test('formatRupiah formats currency correctly', () {
+      expect(Formatters.formatRupiah(15000), 'Rp 15.000');
+      expect(Formatters.formatRupiah(0), 'Rp 0');
+      expect(Formatters.formatRupiah(1250000), 'Rp 1.250.000');
+    });
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    test('formatTanggalIndo formats date in Indonesian format', () {
+      final date = DateTime(2026, 9, 5);
+      final formatted = Formatters.formatTanggalIndo(date);
+      expect(formatted, contains('September 2026'));
+    });
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    test('formatJam formats time in HH:mm format', () {
+      final date = DateTime(2026, 9, 5, 14, 30);
+      final formatted = Formatters.formatJam(date);
+      expect(formatted, '14:30');
+    });
   });
 }
