@@ -7,6 +7,7 @@ class AppConstants {
 
   // Storage Keys
   static const String keyJwtToken = 'jwt_token';
+  static const String keyRefreshToken = 'refresh_token';
   static const String keyUserData = 'user_data';
   static const String keyPrinterAddress = 'printer_address';
   static const String keyPrinterName = 'printer_name';

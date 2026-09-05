@@ -19,8 +19,25 @@ class SecureStorageService {
     return await _storage.read(key: AppConstants.keyJwtToken);
   }
 
+  Future<bool> hasToken() async {
+    final token = await getToken();
+    return token != null && token.isNotEmpty;
+  }
+
   Future<void> deleteToken() async {
     await _storage.delete(key: AppConstants.keyJwtToken);
+  }
+
+  Future<void> saveRefreshToken(String token) async {
+    await _storage.write(key: AppConstants.keyRefreshToken, value: token);
+  }
+
+  Future<String?> getRefreshToken() async {
+    return await _storage.read(key: AppConstants.keyRefreshToken);
+  }
+
+  Future<void> deleteRefreshToken() async {
+    await _storage.delete(key: AppConstants.keyRefreshToken);
   }
 
   Future<void> saveUserData(String userJson) async {
@@ -29,6 +46,10 @@ class SecureStorageService {
 
   Future<String?> getUserData() async {
     return await _storage.read(key: AppConstants.keyUserData);
+  }
+
+  Future<void> deleteUserData() async {
+    await _storage.delete(key: AppConstants.keyUserData);
   }
 
   Future<void> clearAll() async {

@@ -49,8 +49,8 @@ class AppButton extends StatelessWidget {
         break;
       case AppButtonVariant.outline:
         bgColor = Colors.transparent;
-        fgColor = disabled ? AppColors.textMuted : AppColors.primary;
-        borderSide = BorderSide(color: fgColor, width: 1.5);
+        fgColor = disabled ? AppColors.textMuted : AppColors.textPrimary;
+        borderSide = BorderSide(color: disabled ? AppColors.divider : AppColors.border, width: 1.5);
         break;
       case AppButtonVariant.danger:
         bgColor = disabled ? AppColors.textMuted.withValues(alpha: 0.3) : AppColors.danger;

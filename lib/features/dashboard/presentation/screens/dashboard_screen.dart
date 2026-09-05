@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../app/config/app_colors.dart';
 import '../../../../app/config/app_spacing.dart';
 import '../../../../app/config/app_typography.dart';
-import '../../../../app/routes/app_routes.dart';
-import '../../../../core/storage/secure_storage_service.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../../core/utils/ui_helpers.dart';
 import '../../../../core/widgets/widgets.dart';
+import '../../../auth/presentation/bloc/auth_bloc.dart';
 
 /// Screen Beranda Dashboard Utama
 class DashboardScreen extends StatelessWidget {
@@ -40,12 +39,8 @@ class DashboardScreen extends StatelessWidget {
                 confirmText: 'Keluar',
                 isDanger: true,
               );
-              if (confirm == true) {
-                await SecureStorageService().deleteToken();
-                if (context.mounted) {
-                  UiHelpers.showInfoSnackBar(context, 'Anda telah keluar.');
-                  context.go(AppRoutes.login);
-                }
+              if (confirm == true && context.mounted) {
+                context.read<AuthBloc>().add(const AuthLogoutEvent());
               }
             },
           ),

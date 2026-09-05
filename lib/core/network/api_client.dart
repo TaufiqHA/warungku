@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import '../../app/config/app_constants.dart';
 import '../storage/secure_storage_service.dart';
 import 'api_endpoints.dart';
@@ -8,9 +9,11 @@ import 'api_exception.dart';
 class ApiClient {
   final Dio dio;
   final SecureStorageService secureStorage;
+  final VoidCallback? onUnauthorized;
 
   ApiClient({
     required this.secureStorage,
+    this.onUnauthorized,
     Dio? customDio,
   }) : dio = customDio ??
             Dio(
@@ -34,9 +37,15 @@ class ApiClient {
           return handler.next(options);
         },
         onError: (DioException e, handler) async {
-          if (e.response?.statusCode == 401) {
-            // Sesi kedaluwarsa, hapus token
+          final path = e.requestOptions.path;
+          final isAuthEndpoint = path.contains('/auth/login') ||
+              path.contains('/auth/register') ||
+              path.contains(ApiEndpoints.login);
+
+          if (e.response?.statusCode == 401 && !isAuthEndpoint) {
+            // Sesi kedaluwarsa atau token tidak valid pada endpoint terproteksi -> bersihkan token dan panggil callback
             await secureStorage.clearAll();
+            onUnauthorized?.call();
           }
           return handler.next(e);
         },
@@ -85,6 +94,20 @@ class ApiClient {
     }
   }
 
+  /// Helper PATCH Request
+  Future<Response<T>> patch<T>(
+    String path, {
+    dynamic data,
+    Map<String, dynamic>? queryParameters,
+    Options? options,
+  }) async {
+    try {
+      return await dio.patch<T>(path, data: data, queryParameters: queryParameters, options: options);
+    } on DioException catch (e) {
+      throw ApiException.fromDioException(e);
+    }
+  }
+
   /// Helper DELETE Request
   Future<Response<T>> delete<T>(
     String path, {
@@ -99,3 +122,4 @@ class ApiClient {
     }
   }
 }
+

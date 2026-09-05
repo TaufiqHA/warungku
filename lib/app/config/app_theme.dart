@@ -18,10 +18,19 @@ class AppTheme {
         primary: AppColors.primary,
         onPrimary: AppColors.textOnPrimary,
         primaryContainer: AppColors.primaryContainer,
+        onPrimaryContainer: AppColors.primaryDark,
         secondary: AppColors.secondary,
+        onSecondary: Colors.white,
+        secondaryContainer: AppColors.secondaryContainer,
+        onSecondaryContainer: AppColors.secondaryDark,
         surface: AppColors.surface,
+        onSurface: AppColors.textPrimary,
         error: AppColors.danger,
+        onError: Colors.white,
+        errorContainer: AppColors.dangerContainer,
+        onErrorContainer: AppColors.dangerText,
         outline: AppColors.border,
+        outlineVariant: AppColors.divider,
       ),
       appBarTheme: AppBarTheme(
         backgroundColor: AppColors.surface,
@@ -73,6 +82,48 @@ class AppTheme {
           foregroundColor: AppColors.primary,
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 8),
           textStyle: AppTypography.labelMedium.copyWith(color: AppColors.primary),
+        ),
+      ),
+      floatingActionButtonTheme: const FloatingActionButtonThemeData(
+        backgroundColor: AppColors.primary,
+        foregroundColor: AppColors.textOnPrimary,
+        elevation: 3,
+        shape: RoundedRectangleBorder(
+          borderRadius: AppSpacing.roundedLg,
+        ),
+      ),
+      dialogTheme: const DialogThemeData(
+        backgroundColor: AppColors.surface,
+        elevation: 4,
+        shape: RoundedRectangleBorder(
+          borderRadius: AppSpacing.roundedLg,
+        ),
+        titleTextStyle: TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.w700,
+          color: AppColors.textPrimary,
+        ),
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: AppColors.surfaceVariant,
+        disabledColor: AppColors.border,
+        selectedColor: AppColors.primaryContainer,
+        secondarySelectedColor: AppColors.secondaryContainer,
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
+        labelStyle: AppTypography.labelMedium,
+        secondaryLabelStyle: AppTypography.labelMedium,
+        brightness: Brightness.light,
+        shape: const RoundedRectangleBorder(
+          borderRadius: AppSpacing.roundedSm,
+          side: BorderSide(color: AppColors.border, width: 1),
+        ),
+      ),
+      snackBarTheme: SnackBarThemeData(
+        backgroundColor: AppColors.textPrimary,
+        contentTextStyle: AppTypography.bodyMedium.copyWith(color: Colors.white),
+        behavior: SnackBarBehavior.floating,
+        shape: const RoundedRectangleBorder(
+          borderRadius: AppSpacing.roundedMd,
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(

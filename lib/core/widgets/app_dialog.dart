@@ -21,19 +21,32 @@ class AppDialog {
       builder: (ctx) => AlertDialog(
         shape: const RoundedRectangleBorder(borderRadius: AppSpacing.roundedLg),
         backgroundColor: AppColors.surface,
+        titlePadding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.sm),
+        contentPadding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.lg),
+        actionsPadding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.lg),
         title: Text(title, style: AppTypography.titleMedium),
         content: Text(message, style: AppTypography.bodyMedium),
-        actionsPadding: const EdgeInsets.fromLTRB(AppSpacing.md, 0, AppSpacing.md, AppSpacing.md),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text(cancelText, style: AppTypography.labelMedium.copyWith(color: AppColors.textSecondary)),
-          ),
-          AppButton(
-            text: confirmText,
-            height: 40,
-            variant: isDanger ? AppButtonVariant.danger : AppButtonVariant.primary,
-            onPressed: () => Navigator.of(ctx).pop(true),
+          Row(
+            children: [
+              Expanded(
+                child: AppButton(
+                  text: cancelText,
+                  height: 44,
+                  variant: AppButtonVariant.outline,
+                  onPressed: () => Navigator.of(ctx).pop(false),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: AppButton(
+                  text: confirmText,
+                  height: 44,
+                  variant: isDanger ? AppButtonVariant.danger : AppButtonVariant.primary,
+                  onPressed: () => Navigator.of(ctx).pop(true),
+                ),
+              ),
+            ],
           ),
         ],
       ),

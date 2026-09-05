@@ -2,7 +2,7 @@
 class ApiEndpoints {
   ApiEndpoints._();
 
-  static const String baseUrl = 'https://api.warung.com/v1';
+  static const String baseUrl = 'http://103.30.146.68/api/v1';
 
   // Auth
   static const String login = '/auth/login';
