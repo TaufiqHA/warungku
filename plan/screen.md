@@ -136,7 +136,14 @@ Berikut adalah rincian masing-masing tab di dalam Dashboard:
      - Mencatat pembatalan ke backend via API `PATCH /transactions/{id}/cancel`.
   3. **Dialog Konfirmasi Hapus Permanen (`transactionIdToDelete`)**:
      - *Khusus Role Owner*: Menghapus transaksi secara permanen via `DELETE /transactions/{id}`.
-  4. **Dialog Cetak Struk Bluetooth / Jaringan (`showPrinterDialog`)**:
+  4. **Modal Pratinjau Struk & Export Surat Penawaran (`SalesReceiptDialog`)**:
+     - Ditampilkan saat kasir menekan tombol "Cetak Ulang Struk" pada `PenjualanTab` atau saat pelunasan di `BerandaTab`.
+     - Menampilkan pratinjau struk penjualan (nama warung, nomor transaksi, kasir, daftar belanja, total, dan metode bayar).
+     - *Tombol Aksi*:
+       - **"Export PDF"** (`Icons.picture_as_pdf_outlined`): Membentuk dokumen PDF Surat Penawaran berformat A4 resmi (Kop Toko, Kepada Yth Pelanggan, SURAT PENAWARAN, box metadata No/Tgl/Sales, tabel berbingkai No/Nama Barang/Qty/Harga/Diskon/Jumlah, kotak rekap Total/PPN 11%/Grand Total, dan tanda tangan Sales) via `QuotationPdfService`, menyimpan berkas sementara ke cache, lalu langsung membukanya di aplikasi penampil PDF perangkat (`OpenFilex.open` / `ACTION_VIEW`).
+       - **"Cetak Ulang"** (`Icons.print_rounded`): Mengirim perintah cetak langsung ke printer thermal Bluetooth atau jaringan yang terhubung via `ThermalPrinterService`.
+       - Tombol Tutup / Batal.
+  5. **Dialog Cetak Struk Bluetooth / Jaringan (`showPrinterDialog`)**:
      - Pilihan printer thermal Bluetooth terpasang (*paired devices*).
      - Opsi alamat IP & Port untuk printer jaringan lokal (Virtual Thermal Printer / LAN ESC/POS).
 
@@ -164,11 +171,15 @@ Berikut adalah rincian masing-masing tab di dalam Dashboard:
   3. **Formulir Tambah Kategori Baru (`showAddKategoriModal`)**:
      - *Field Nama Kategori*: Teks nama kategori baru (misal: "Paket Hemat").
      - *Tombol Aksi*: "Batal", "Simpan Kategori".
-  4. **Dialog Pengaturan Urutan Tampilan Menu (`showPdfSettingsDialog`)**:
-     - Memungkinkan reordering (mengatur urutan tampil) kategori menu dan produk di kasir / daftar cetak katalog.
-     - *Tombol Aksi*: "Simpan Urutan" (sinkronisasi ke API layout backend).
+  4. **Dialog Pengaturan Urutan & Cetak PDF Menu (`AturUrutanPdfDialog`)**:
+     - Dibuka melalui tombol ikon PDF di pojok kanan atas AppBar saat Tab Manajemen Barang aktif (`AdminTokoDashboardScreen`).
+     - Memungkinkan reordering (mengatur urutan tampil) kategori menu menggunakan panah atas/bawah, mengubah nama kategori (*rename*) via ikon edit pensil biru, serta mengatur urutan item menu di dalam kategori.
+     - *Tombol Aksi*: "Simpan Layout" (sinkronisasi ke local storage & API layout backend), "Export PDF" (mencetak katalog PDF A4 2 kolom rapi berisi Daftar Harga, kotak nomor meja, format `Rp. XX K`, dan kotak kuantitas/checklist), serta tombol "Batal".
   5. **Dialog Konfirmasi Hapus Menu (`itemToDelete`)**:
      - Dialog peringatan sebelum menghapus produk dari inventaris.
+  6. **Aksi Ekspor File Excel (`ExportExcelAction`)**:
+     - Dibuka melalui tombol ikon Excel (`Icons.table_chart_outlined`) di pojok kanan atas AppBar saat Tab Manajemen Barang aktif (`AdminTokoDashboardScreen`).
+     - Memanggil API `GET /api/v1/products/export`, mengunduh berkas `.xlsx`, menyimpan ke cache lokal, dan langsung membukanya di aplikasi pembaca spreadsheet di perangkat (seperti Google Sheets / Microsoft Excel / WPS Office via `ExcelExportService`), bukan di-share.
 
 ---
 

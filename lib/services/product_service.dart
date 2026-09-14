@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../core/constants/api_constants.dart';
 import '../data/models/product_model.dart';
 import 'cache_entry.dart';
@@ -165,5 +167,182 @@ class ProductService {
       if (e is Exception) rethrow;
       throw Exception('Gagal menambahkan kategori.');
     }
+  }
+
+  Future<void> saveCategoriesLayout(List<Map<String, dynamic>> categories) async {
+    try {
+      final headers = await _authHeaders();
+      final response = await _client.post(
+        Uri.parse(ApiConstants.categoriesLayoutEndpoint),
+        headers: headers,
+        body: jsonEncode({'categories': categories}),
+      );
+
+      final Map<String, dynamic> body = jsonDecode(response.body);
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        throw Exception(body['message'] ?? 'Gagal menyimpan urutan kategori');
+      }
+    } on SocketException {
+      // Offline-first resilience
+    } catch (e) {
+      if (e is Exception && !e.toString().contains('Gagal menyimpan')) {
+        // Network/parse issue
+      } else {
+        rethrow;
+      }
+    }
+  }
+
+  Future<void> saveProductsLayout(List<Map<String, dynamic>> products) async {
+    try {
+      final headers = await _authHeaders();
+      final response = await _client.post(
+        Uri.parse(ApiConstants.productsLayoutEndpoint),
+        headers: headers,
+        body: jsonEncode({'products': products}),
+      );
+
+      final Map<String, dynamic> body = jsonDecode(response.body);
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        throw Exception(body['message'] ?? 'Gagal menyimpan urutan produk');
+      }
+    } on SocketException {
+      // Offline-first resilience
+    } catch (e) {
+      if (e is Exception && !e.toString().contains('Gagal menyimpan')) {
+        // Network/parse issue
+      } else {
+        rethrow;
+      }
+    }
+  }
+
+  static const String _layoutPrefsKey = 'menu_pdf_layout_config';
+
+  Future<Map<String, dynamic>> loadLocalLayoutConfig() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_layoutPrefsKey);
+    if (raw != null && raw.isNotEmpty) {
+      try {
+        return jsonDecode(raw) as Map<String, dynamic>;
+      } catch (_) {}
+    }
+    return {};
+  }
+
+  Future<void> saveLocalLayoutConfig({
+    required List<String> categoryOrder,
+    required Map<String, String> categoryNames,
+    required Map<String, List<String>> productOrderPerCategory,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final data = {
+      'categoryOrder': categoryOrder,
+      'categoryNames': categoryNames,
+      'productOrderPerCategory': productOrderPerCategory,
+    };
+    await prefs.setString(_layoutPrefsKey, jsonEncode(data));
+  }
+
+  Future<Map<String, dynamic>> exportProducts({
+    String? search,
+    String? categoryId,
+    String? sortBy,
+    String? sortOrder,
+  }) async {
+    try {
+      final headers = await _authHeaders();
+      final queryParams = <String, String>{
+        if (search != null && search.isNotEmpty) 'search': search,
+        if (categoryId != null && categoryId.isNotEmpty) 'category_id': categoryId,
+        if (sortBy != null && sortBy.isNotEmpty) 'sort_by': sortBy,
+        if (sortOrder != null && sortOrder.isNotEmpty) 'sort_order': sortOrder,
+      };
+
+      final uri = Uri.parse(ApiConstants.productsExportEndpoint).replace(
+        queryParameters: queryParams.isNotEmpty ? queryParams : null,
+      );
+
+      final response = await _client.get(uri, headers: headers);
+
+      if (response.statusCode == 200) {
+        final contentType = response.headers['content-type'] ?? '';
+        if (contentType.contains('application/json') || response.body.trim().startsWith('{')) {
+          final Map<String, dynamic> body = jsonDecode(response.body);
+          final downloadUrl = body['download_url'] ?? body['data']?['download_url'];
+          return {
+            'success': body['success'] ?? true,
+            'message': body['message'] ?? 'Export data berhasil disiapkan',
+            if (downloadUrl != null) 'download_url': downloadUrl.toString(),
+          };
+        } else {
+          return {
+            'success': true,
+            'message': 'File Excel berhasil diunduh',
+            'bytes': response.bodyBytes,
+          };
+        }
+      } else {
+        try {
+          final body = jsonDecode(response.body);
+          throw Exception(body['message'] ?? 'Gagal mengekspor data produk (${response.statusCode})');
+        } catch (e) {
+          if (e is Exception && e.toString().startsWith('Exception: ')) rethrow;
+          throw Exception('Gagal mengekspor data produk (${response.statusCode})');
+        }
+      }
+    } on SocketException {
+      throw Exception('Gagal terhubung ke server.');
+    } catch (e) {
+      if (e is Exception) rethrow;
+      throw Exception('Gagal memproses ekspor produk.');
+    }
+  }
+
+  Future<Uint8List> downloadExportFile(String downloadUrl) async {
+    try {
+      final headers = await _authHeaders();
+      String url = downloadUrl;
+      if (!url.startsWith('http')) {
+        url = '${ApiConstants.baseUrl}${url.startsWith('/') ? '' : '/'}$url';
+      } else {
+        final parsedUri = Uri.parse(url);
+        if (parsedUri.host == 'localhost' || parsedUri.host == '127.0.0.1') {
+          final baseUri = Uri.parse(ApiConstants.baseUrl);
+          url = parsedUri.replace(
+            scheme: baseUri.scheme,
+            host: baseUri.host,
+            port: baseUri.hasPort ? baseUri.port : null,
+          ).toString();
+        }
+      }
+
+      final response = await _client.get(Uri.parse(url), headers: headers);
+      if (response.statusCode == 200) {
+        return response.bodyBytes;
+      } else {
+        throw Exception('Gagal mengunduh file Excel (${response.statusCode})');
+      }
+    } on SocketException {
+      throw Exception('Gagal terhubung ke server saat mengunduh berkas.');
+    } catch (e) {
+      if (e is Exception) rethrow;
+      throw Exception('Gagal mengunduh file Excel.');
+    }
+  }
+
+  static String getExportFileExtension(String? downloadUrl, [String? contentType]) {
+    if (downloadUrl != null) {
+      final cleanUrl = downloadUrl.split('?').first.toLowerCase();
+      if (cleanUrl.endsWith('.csv')) return 'csv';
+      if (cleanUrl.endsWith('.xlsx')) return 'xlsx';
+      if (cleanUrl.endsWith('.xls')) return 'xls';
+    }
+    if (contentType != null) {
+      final ct = contentType.toLowerCase();
+      if (ct.contains('csv')) return 'csv';
+      if (ct.contains('spreadsheet') || ct.contains('excel')) return 'xlsx';
+    }
+    return 'xlsx';
   }
 }

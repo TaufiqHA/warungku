@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../data/models/transaction_model.dart';
+import '../services/quotation_pdf_service.dart';
 import '../services/thermal_printer_service.dart';
 import 'orderan_aktif_card.dart';
 
@@ -257,6 +259,7 @@ class SalesReceiptDialog extends StatefulWidget {
 
 class _SalesReceiptDialogState extends State<SalesReceiptDialog> {
   bool _isPrinting = false;
+  bool _isExportingPdf = false;
 
   @override
   void initState() {
@@ -265,6 +268,42 @@ class _SalesReceiptDialogState extends State<SalesReceiptDialog> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _triggerPrint(isAuto: true);
       });
+    }
+  }
+
+  Future<void> _handleExportPdf() async {
+    if (_isExportingPdf) return;
+    setState(() => _isExportingPdf = true);
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final warungName = prefs.getString('warung_name') ?? widget.storeName;
+      final warungAddress = prefs.getString('warung_address');
+
+      await QuotationPdfService.openOrPrintQuotationPdf(
+        storeName: warungName.isNotEmpty ? warungName : 'WARUNG KITA',
+        storeAddress: warungAddress,
+        transactionId: widget.transactionId,
+        dateTimeStr: widget.dateTimeStr,
+        customerName: widget.customerName,
+        cashierName: widget.cashierName,
+        items: widget.items,
+        subtotal: widget.subtotal,
+        discountAmount: widget.discountAmount,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal membuat PDF: $e'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isExportingPdf = false);
+      }
     }
   }
 
@@ -528,13 +567,32 @@ class _SalesReceiptDialogState extends State<SalesReceiptDialog> {
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
           style: TextButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
           ),
           child: const Text('Tutup'),
         ),
+        OutlinedButton.icon(
+          onPressed: (_isExportingPdf || _isPrinting) ? null : _handleExportPdf,
+          icon: _isExportingPdf
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.picture_as_pdf_outlined, size: 18),
+          label: Text(_isExportingPdf ? 'Export...' : 'Export PDF'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: theme.colorScheme.primary,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        ),
         ElevatedButton.icon(
-          onPressed: _isPrinting ? null : () => _triggerPrint(isAuto: false),
+          onPressed: (_isPrinting || _isExportingPdf) ? null : () => _triggerPrint(isAuto: false),
           icon: _isPrinting
               ? const SizedBox(
                   width: 16,
@@ -546,7 +604,7 @@ class _SalesReceiptDialogState extends State<SalesReceiptDialog> {
           style: ElevatedButton.styleFrom(
             backgroundColor: accentGreen,
             foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
