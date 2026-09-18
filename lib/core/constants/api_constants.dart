@@ -1,6 +1,6 @@
 class ApiConstants {
   //static const String baseUrl = 'http://103.30.146.68';
-  static const String baseUrl = 'http://192.168.1.199:8001';
+  static const String baseUrl = 'http://10.156.66.40:8001';
   static const String loginEndpoint = '$baseUrl/api/v1/auth/login';
   static const String logoutEndpoint = '$baseUrl/api/v1/auth/logout';
   static const String profileEndpoint = '$baseUrl/api/v1/users/me';
