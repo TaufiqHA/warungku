@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/auth/app_roles.dart';
 import '../../core/auth/role_guard.dart';
 import '../../data/models/auth_model.dart';
-import 'tabs/beranda_tab.dart';
+import 'tabs/beranda_kantor_tab.dart';
 import 'tabs/biaya_tab.dart';
 import 'tabs/profil_tab.dart';
 import '../../widgets/printer_settings_dialog.dart';
@@ -23,6 +23,7 @@ class AdminKantorDashboardScreen extends StatefulWidget {
 
 class _AdminKantorDashboardScreenState extends State<AdminKantorDashboardScreen> {
   late int _currentIndex;
+  late final Set<int> _visitedTabs;
 
   final List<String> _titles = [
     'Beranda Admin Kantor',
@@ -34,12 +35,14 @@ class _AdminKantorDashboardScreenState extends State<AdminKantorDashboardScreen>
   void initState() {
     super.initState();
     _currentIndex = widget.initialTabIndex;
+    _visitedTabs = {_currentIndex};
   }
 
   void _switchTab(int index) {
     if (index >= 0 && index < _titles.length) {
       setState(() {
         _currentIndex = index;
+        _visitedTabs.add(index);
       });
     }
   }
@@ -57,15 +60,20 @@ class _AdminKantorDashboardScreenState extends State<AdminKantorDashboardScreen>
     final theme = Theme.of(context);
 
     final tabs = [
-      BerandaTab(
-        onGoToProfil: () => _switchTab(2),
-      ),
-      const BiayaTab(),
-      ProfilTab(
-        onLogout: () {
-          Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
-        },
-      ),
+      _visitedTabs.contains(0)
+          ? BerandaKantorTab(
+              onGoToBiaya: () => _switchTab(1),
+              onGoToProfil: () => _switchTab(2),
+            )
+          : const SizedBox.shrink(),
+      _visitedTabs.contains(1) ? const BiayaTab() : const SizedBox.shrink(),
+      _visitedTabs.contains(2)
+          ? ProfilTab(
+              onLogout: () {
+                Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+              },
+            )
+          : const SizedBox.shrink(),
     ];
 
     return Scaffold(
