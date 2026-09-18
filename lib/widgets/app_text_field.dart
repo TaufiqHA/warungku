@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class AppTextField extends StatelessWidget {
   final String label;
@@ -16,6 +17,7 @@ class AppTextField extends StatelessWidget {
   final VoidCallback? onTap;
   final TextInputAction? textInputAction;
   final void Function(String)? onFieldSubmitted;
+  final List<TextInputFormatter>? inputFormatters;
 
   const AppTextField({
     super.key,
@@ -34,6 +36,7 @@ class AppTextField extends StatelessWidget {
     this.onTap,
     this.textInputAction,
     this.onFieldSubmitted,
+    this.inputFormatters,
   });
 
   @override
@@ -50,6 +53,7 @@ class AppTextField extends StatelessWidget {
       textInputAction: textInputAction,
       onFieldSubmitted: onFieldSubmitted,
       validator: validator,
+      inputFormatters: inputFormatters,
       style: theme.textTheme.bodyMedium,
       decoration: InputDecoration(
         labelText: showLabelAbove ? null : label,

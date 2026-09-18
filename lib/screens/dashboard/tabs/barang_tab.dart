@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/utils/angka_ribuan.dart';
 import '../../../data/models/product_model.dart';
 import '../../../services/product_service.dart';
 import '../../../widgets/app_badge.dart';
@@ -88,7 +89,9 @@ class _BarangTabState extends State<BarangTab> {
     final isEdit = product != null;
     final formKey = GlobalKey<FormState>();
     final nameController = TextEditingController(text: product?.name ?? '');
-    final priceController = TextEditingController(text: product != null ? product.price.toInt().toString() : '');
+    final priceController = TextEditingController(
+      text: product != null ? AngkaRibuan.format(product.price) : '',
+    );
     final categoryController = TextEditingController(text: product?.category ?? 'Makanan');
 
     showDialog(
@@ -117,9 +120,13 @@ class _BarangTabState extends State<BarangTab> {
                     label: 'Harga (Rp)',
                     controller: priceController,
                     keyboardType: TextInputType.number,
+                    hintText: '15.000',
+                    inputFormatters: const [RibuanInputFormatter()],
                     validator: (v) {
                       if (v == null || v.trim().isEmpty) return 'Harga wajib diisi';
-                      if (double.tryParse(v) == null) return 'Harus berupa angka';
+                      final nominal = AngkaRibuan.parse(v);
+                      if (nominal == null) return 'Harus berupa angka';
+                      if (nominal <= 0) return 'Harga harus lebih dari 0';
                       return null;
                     },
                   ),
@@ -151,6 +158,7 @@ class _BarangTabState extends State<BarangTab> {
                     height: 38,
                     onPressed: () async {
                       if (!formKey.currentState!.validate()) return;
+                      final price = AngkaRibuan.parse(priceController.text) ?? 0;
                       Navigator.of(ctx).pop();
 
                       try {
@@ -158,13 +166,13 @@ class _BarangTabState extends State<BarangTab> {
                           await _productService.updateProduct(
                             id: product.id,
                             name: nameController.text,
-                            price: double.parse(priceController.text),
+                            price: price,
                             category: categoryController.text,
                           );
                         } else {
                           await _productService.addProduct(
                             name: nameController.text,
-                            price: double.parse(priceController.text),
+                            price: price,
                             category: categoryController.text,
                           );
                         }
