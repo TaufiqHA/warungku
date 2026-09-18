@@ -1,9 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/orderan_aktif_card.dart';
 import '../widgets/sales_receipt_dialog.dart';
+import 'bluetooth_permission_service.dart';
 
 class ThermalPrinterConfig {
   final String connectionType; // 'bluetooth' or 'network'
@@ -57,6 +59,16 @@ class PrintResult {
   const PrintResult(this.success, this.message);
 }
 
+/// Hasil pemindaian perangkat Bluetooth terpasang beserta pesan kegagalannya.
+class PairedDevicesResult {
+  final List<BluetoothInfo> devices;
+  final String? errorMessage;
+
+  const PairedDevicesResult({this.devices = const [], this.errorMessage});
+
+  bool get hasError => errorMessage != null && errorMessage!.isNotEmpty;
+}
+
 class ThermalPrinterService {
   static final ThermalPrinterService _instance = ThermalPrinterService._internal();
   static ThermalPrinterService get instance => _instance;
@@ -81,6 +93,37 @@ class ThermalPrinterService {
     return await PrintBluetoothThermal.pairedBluetooths;
   };
 
+  /// Bluetooth disconnect abstraction for testability
+  Future<bool> Function() bluetoothDisconnector = () async {
+    return await PrintBluetoothThermal.disconnect;
+  };
+
+  /// Status adapter Bluetooth perangkat (nyala / mati).
+  Future<bool> Function() bluetoothEnabledChecker = () async {
+    try {
+      // Plugin print_bluetooth_thermal hanya mendukung Android/Windows; pada
+      // platform lain (mis. pengujian desktop) status dianggap aktif.
+      if (!Platform.isAndroid) return true;
+      return await PrintBluetoothThermal.bluetoothEnabled;
+    } catch (e) {
+      debugPrint('ThermalPrinterService.bluetoothEnabled: $e');
+      return true;
+    }
+  };
+
+  /// Status koneksi socket Bluetooth ke printer (untuk indikator UI).
+  Future<bool> Function() bluetoothConnectionChecker = () async {
+    try {
+      return await PrintBluetoothThermal.connectionStatus;
+    } catch (e) {
+      debugPrint('ThermalPrinterService.connectionStatus: $e');
+      return false;
+    }
+  };
+
+  /// Pengelola izin Bluetooth runtime.
+  BluetoothPermissionService permissionService = BluetoothPermissionService.instance;
+
   // ESC/POS Command Constants
   static const List<int> cmdInit = [0x1B, 0x40]; // ESC @
   static const List<int> cmdAlignLeft = [0x1B, 0x61, 0x00]; // ESC a 0
@@ -93,11 +136,102 @@ class ThermalPrinterService {
   static const List<int> cmdCut = [0x1D, 0x56, 0x41, 0x03]; // GS V 65 3
   static const List<int> cmdFeed3 = [0x1B, 0x64, 0x03]; // ESC d 3
 
-  Future<List<BluetoothInfo>> getPairedDevices() async {
+  Future<List<BluetoothInfo>> getPairedDevices({bool requestPermission = false}) async {
+    final result = await scanPairedDevices(requestPermission: requestPermission);
+    return result.devices;
+  }
+
+  /// Memindai printer Bluetooth yang sudah dipasangkan (paired) ke perangkat.
+  ///
+  /// Mengembalikan pesan kesalahan yang spesifik (izin ditolak / Bluetooth mati)
+  /// sehingga UI bisa menampilkan penyebabnya, bukan sekadar "belum ada printer".
+  Future<PairedDevicesResult> scanPairedDevices({bool requestPermission = false}) async {
+    final permission = requestPermission
+        ? await permissionService.request()
+        : await permissionService.check();
+
+    if (permission != BluetoothPermissionStatus.granted) {
+      return PairedDevicesResult(errorMessage: BluetoothPermissionService.message(permission));
+    }
+
+    if (!await bluetoothEnabledChecker()) {
+      return const PairedDevicesResult(
+        errorMessage: 'Bluetooth perangkat sedang tidak aktif. Nyalakan Bluetooth lalu pindai ulang.',
+      );
+    }
+
     try {
-      return await bluetoothScanner();
-    } catch (_) {
-      return [];
+      final devices = await bluetoothScanner();
+      return PairedDevicesResult(devices: devices);
+    } catch (e) {
+      return PairedDevicesResult(errorMessage: 'Gagal memindai perangkat Bluetooth: $e');
+    }
+  }
+
+  /// Status adaptor Bluetooth perangkat.
+  Future<bool> isBluetoothEnabled() => bluetoothEnabledChecker();
+
+  /// Status koneksi socket ke printer (indikator UI).
+  Future<bool> isPrinterConnected() => bluetoothConnectionChecker();
+
+  /// Status izin Bluetooth tanpa memunculkan dialog.
+  Future<BluetoothPermissionStatus> checkPermission() => permissionService.check();
+
+  /// Meminta izin Bluetooth (memunculkan dialog sistem bila perlu).
+  Future<BluetoothPermissionStatus> requestPermission() => permissionService.request();
+
+  /// Menyambungkan printer Bluetooth terpilih tanpa mencetak (untuk pengujian).
+  Future<PrintResult> connectPrinter({ThermalPrinterConfig? overrideConfig}) async {
+    final config = overrideConfig ?? await getConfig();
+
+    if (!config.isBluetooth) {
+      return const PrintResult(false, 'Mode printer aktif adalah Jaringan (IP), bukan Bluetooth.');
+    }
+
+    final mac = config.macAddress.trim();
+    final displayName = config.printerName.isNotEmpty ? config.printerName : mac;
+    if (mac.isEmpty) {
+      return const PrintResult(false, 'Pilih printer Bluetooth terlebih dahulu.');
+    }
+
+    final permission = await permissionService.request();
+    if (permission != BluetoothPermissionStatus.granted) {
+      return PrintResult(false, BluetoothPermissionService.message(permission));
+    }
+
+    if (!await bluetoothEnabledChecker()) {
+      return const PrintResult(false, 'Bluetooth perangkat sedang tidak aktif. Nyalakan Bluetooth lalu coba lagi.');
+    }
+
+    try {
+      final isConnected = await bluetoothConnector(mac);
+      if (isConnected) {
+        return PrintResult(true, 'Terhubung ke printer Bluetooth ($displayName)');
+      }
+      return PrintResult(
+        false,
+        'Gagal terhubung ke ($displayName). Pastikan printer menyala, sudah dipasangkan (pair) di Bluetooth HP, dan tidak dipakai perangkat lain.',
+      );
+    } catch (e) {
+      return PrintResult(false, 'Error koneksi Bluetooth printer: ${e.toString()}');
+    }
+  }
+
+  /// Memutuskan koneksi printer Bluetooth yang sedang aktif.
+  Future<PrintResult> disconnectPrinter() async {
+    try {
+      await bluetoothDisconnector();
+      return const PrintResult(true, 'Koneksi printer Bluetooth diputuskan');
+    } catch (e) {
+      return PrintResult(false, 'Gagal memutuskan koneksi printer: ${e.toString()}');
+    }
+  }
+
+  Future<void> _safeDisconnect() async {
+    try {
+      await bluetoothDisconnector();
+    } catch (e) {
+      debugPrint('ThermalPrinterService._safeDisconnect: $e');
     }
   }
 
@@ -123,6 +257,29 @@ class ThermalPrinterService {
       return '$trimmed $right';
     }
     return '$left $right';
+  }
+
+  /// Memecah teks panjang menjadi baris-baris selebar [width] karakter kertas.
+  List<String> _wrapText(String text, int width) {
+    final clean = text.trim();
+    if (clean.isEmpty || width <= 0) return const [];
+
+    final words = clean.split(RegExp(r'\s+'));
+    final lines = <String>[];
+    var current = '';
+
+    for (final word in words) {
+      if (current.isEmpty) {
+        current = word;
+      } else if (current.length + 1 + word.length <= width) {
+        current = '$current $word';
+      } else {
+        lines.add(current);
+        current = word;
+      }
+    }
+    if (current.isNotEmpty) lines.add(current);
+    return lines;
   }
 
   String _formatRupiah(double amount) {
@@ -172,6 +329,7 @@ class ThermalPrinterService {
   List<int> generateSalesReceiptBytes({
     required ThermalPrinterConfig config,
     required String storeName,
+    String? storeAddress,
     required String transactionId,
     required String dateTimeStr,
     required String customerName,
@@ -187,13 +345,16 @@ class ThermalPrinterService {
 
     bytes.addAll(cmdInit);
 
-    // Header Toko
+    // Header Toko (nama + alamat dari Profil Warung)
     bytes.addAll(cmdAlignCenter);
     bytes.addAll(cmdFontTitle);
     bytes.addAll(cmdBoldOn);
     bytes.addAll(utf8.encode('$storeName\n'));
     bytes.addAll(cmdFontNormal);
     bytes.addAll(cmdBoldOff);
+    for (final line in _wrapText(storeAddress ?? '', w)) {
+      bytes.addAll(utf8.encode('$line\n'));
+    }
     bytes.addAll(utf8.encode('STRUK PEMBAYARAN\n'));
     bytes.addAll(utf8.encode('${'-' * w}\n'));
 
@@ -297,33 +458,66 @@ class ThermalPrinterService {
     required String macAddress,
     String? printerName,
   }) async {
-    final displayName = printerName != null && printerName.isNotEmpty ? printerName : macAddress;
-    if (macAddress.trim().isEmpty) {
-      return const PrintResult(false, 'Belum ada printer Bluetooth yang dipilih di Pengaturan.');
+    final mac = macAddress.trim();
+    final displayName = printerName != null && printerName.isNotEmpty ? printerName : mac;
+
+    if (mac.isEmpty) {
+      return const PrintResult(
+        false,
+        'Belum ada printer Bluetooth yang dipilih. Buka Pengaturan Printer Thermal di halaman Profil.',
+      );
+    }
+
+    // 1. Izin runtime (Android 12+). Tanpa ini plugin menolak connect & daftar printer.
+    final permission = await permissionService.request();
+    if (permission != BluetoothPermissionStatus.granted) {
+      return PrintResult(false, BluetoothPermissionService.message(permission));
+    }
+
+    // 2. Adaptor Bluetooth harus menyala.
+    if (!await bluetoothEnabledChecker()) {
+      return const PrintResult(
+        false,
+        'Bluetooth perangkat sedang tidak aktif. Nyalakan Bluetooth lalu cetak ulang.',
+      );
     }
 
     try {
-      final isConnected = await bluetoothConnector(macAddress.trim());
+      // 3. Sambungkan (native plugin otomatis menutup socket lama lebih dulu).
+      final isConnected = await bluetoothConnector(mac);
       if (!isConnected) {
         return PrintResult(
           false,
-          'Gagal terhubung ke printer Bluetooth ($displayName). Pastikan printer menyala & Bluetooth aktif.',
+          'Gagal terhubung ke printer Bluetooth ($displayName). Pastikan printer menyala, sudah dipasangkan (pair) di Bluetooth HP, dan tidak sedang dipakai perangkat lain.',
         );
       }
 
-      final isSent = await bluetoothWriter(bytes);
+      // 4. Kirim data struk. Plugin sudah memecah kiriman per 16 KB.
+      var isSent = await bluetoothWriter(bytes);
+
+      if (!isSent) {
+        // Koneksi basi (printer baru dinyalakan / socket mati) -> sambung ulang & kirim sekali lagi.
+        await _safeDisconnect();
+        final isReconnected = await bluetoothConnector(mac);
+        if (isReconnected) {
+          isSent = await bluetoothWriter(bytes);
+        }
+      }
+
       if (isSent) {
         return PrintResult(
           true,
           'Struk berhasil dicetak via Bluetooth ($displayName)',
         );
-      } else {
-        return PrintResult(
-          false,
-          'Gagal mengirim data struk ke printer Bluetooth ($displayName).',
-        );
       }
+
+      await _safeDisconnect();
+      return PrintResult(
+        false,
+        'Data struk gagal dikirim ke ($displayName). Coba matikan lalu nyalakan ulang printer, kemudian cetak lagi.',
+      );
     } catch (e) {
+      await _safeDisconnect();
       return PrintResult(
         false,
         'Error koneksi Bluetooth printer: ${e.toString()}',
@@ -388,9 +582,16 @@ class ThermalPrinterService {
     required String paymentMethod,
   }) async {
     final config = await getConfig();
+    // Kop struk mengikuti identitas warung yang tersimpan (Profil Warung).
+    final prefs = await SharedPreferences.getInstance();
+    final savedName = prefs.getString('warung_name')?.trim();
+    final savedAddress = prefs.getString('warung_address')?.trim();
+    final resolvedName = (savedName != null && savedName.isNotEmpty) ? savedName : storeName;
+
     final bytes = generateSalesReceiptBytes(
       config: config,
-      storeName: storeName,
+      storeName: resolvedName,
+      storeAddress: (savedAddress != null && savedAddress.isNotEmpty) ? savedAddress : null,
       transactionId: transactionId,
       dateTimeStr: dateTimeStr,
       customerName: customerName,
