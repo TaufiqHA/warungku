@@ -21,6 +21,7 @@ import 'package:warungku/widgets/tambah_item_pesanan_dialog.dart';
 import 'package:warungku/widgets/detail_transaksi_dialog.dart';
 import 'package:warungku/widgets/sales_receipt_dialog.dart';
 import 'package:warungku/data/models/cart_item_model.dart';
+import 'package:warungku/data/models/transaction_group_model.dart';
 import 'package:warungku/widgets/kitchen_receipt_dialog.dart';
 import 'package:warungku/widgets/riwayat_transaksi_card.dart';
 import 'package:warungku/services/thermal_printer_service.dart';
@@ -1028,7 +1029,225 @@ void main() {
     await tester.pump();
     expect(profilTapped, true);
   });
+
+  test('TransactionGroup.fromTransactionList mengelompokkan item dengan idTransaksi sama ke satu bill', () {
+    final rawList = [
+      const TransactionModel(
+        idTransaksi: 'TRX-20260919-01',
+        id: '1',
+        namaItem: 'Ikan Kerapu Tumis Size M',
+        jumlah: 1,
+        harga: 55000,
+        waktu: '2026-09-19T13:48:50Z',
+        dicatatOleh: 'Admin Toko',
+        catatan: '',
+        paymentMethod: 'CASH',
+        orderStatus: 'COMPLETED',
+        customerName: 'Indah',
+      ),
+      const TransactionModel(
+        idTransaksi: 'TRX-20260919-01',
+        id: '2',
+        namaItem: 'Kelapa bulat',
+        jumlah: 1,
+        harga: 20000,
+        waktu: '2026-09-19T13:48:50Z',
+        dicatatOleh: 'Admin Toko',
+        catatan: 'Dingin',
+        paymentMethod: 'CASH',
+        orderStatus: 'COMPLETED',
+        customerName: 'Indah',
+      ),
+      const TransactionModel(
+        idTransaksi: 'TRX-20260919-01',
+        id: '3',
+        namaItem: 'Jus Mangga',
+        jumlah: 2,
+        harga: 15000,
+        waktu: '2026-09-19T13:48:50Z',
+        dicatatOleh: 'Admin Toko',
+        catatan: '',
+        paymentMethod: 'CASH',
+        orderStatus: 'COMPLETED',
+        customerName: 'Indah',
+      ),
+      const TransactionModel(
+        idTransaksi: 'TRX-20260919-02',
+        id: '4',
+        namaItem: 'Ayam Goreng',
+        jumlah: 1,
+        harga: 25000,
+        waktu: '2026-09-19T14:00:00Z',
+        dicatatOleh: 'Admin Toko',
+        catatan: '',
+        paymentMethod: 'QRIS',
+        orderStatus: 'COMPLETED',
+        customerName: 'Budi',
+      ),
+    ];
+
+    final groups = TransactionGroup.fromTransactionList(rawList);
+
+    // Harus terkelompok menjadi 2 transaksi (Indah dan Budi), bukan 4 baris item terpisah
+    expect(groups.length, 2);
+
+    final indahGroup = groups.firstWhere((g) => g.idTransaksi == 'TRX-20260919-01');
+    expect(indahGroup.customerName, 'Indah');
+    expect(indahGroup.items.length, 3);
+    expect(indahGroup.totalQuantity, 4); // 1 + 1 + 2
+    expect(indahGroup.totalHarga, 105000.0); // 55000 + 20000 + 30000
+    expect(indahGroup.isMultiItem, true);
+
+    final budiGroup = groups.firstWhere((g) => g.idTransaksi == 'TRX-20260919-02');
+    expect(budiGroup.customerName, 'Budi');
+    expect(budiGroup.items.length, 1);
+    expect(budiGroup.totalQuantity, 1);
+    expect(budiGroup.totalHarga, 25000.0);
+    expect(budiGroup.isMultiItem, false);
+  });
+
+  testWidgets('RiwayatTransaksiCard menampilkan daftar item dan total belanja untuk multi-item bill', (WidgetTester tester) async {
+    final group = TransactionGroup(
+      idTransaksi: 'TRX-MULTI-01',
+      customerName: 'Indah',
+      waktu: '2026-09-19T13:48:50Z',
+      dicatatOleh: 'Admin Toko',
+      paymentMethod: 'CASH',
+      orderStatus: 'COMPLETED',
+      items: const [
+        TransactionModel(
+          idTransaksi: 'TRX-MULTI-01',
+          id: '1',
+          namaItem: 'Ikan Kerapu Tumis Size M',
+          jumlah: 1,
+          harga: 55000,
+          waktu: '2026-09-19T13:48:50Z',
+          dicatatOleh: 'Admin Toko',
+          catatan: '',
+          paymentMethod: 'CASH',
+          orderStatus: 'COMPLETED',
+          customerName: 'Indah',
+        ),
+        TransactionModel(
+          idTransaksi: 'TRX-MULTI-01',
+          id: '2',
+          namaItem: 'Kelapa bulat',
+          jumlah: 1,
+          harga: 20000,
+          waktu: '2026-09-19T13:48:50Z',
+          dicatatOleh: 'Admin Toko',
+          catatan: '',
+          paymentMethod: 'CASH',
+          orderStatus: 'COMPLETED',
+          customerName: 'Indah',
+        ),
+        TransactionModel(
+          idTransaksi: 'TRX-MULTI-01',
+          id: '3',
+          namaItem: 'Jus Mangga',
+          jumlah: 1,
+          harga: 20000,
+          waktu: '2026-09-19T13:48:50Z',
+          dicatatOleh: 'Admin Toko',
+          catatan: '',
+          paymentMethod: 'CASH',
+          orderStatus: 'COMPLETED',
+          customerName: 'Indah',
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: RiwayatTransaksiCard(group: group),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    // Verifikasi header
+    expect(find.text('Indah'), findsOneWidget);
+    expect(find.text('TRX-MULTI-01'), findsOneWidget);
+    expect(find.text('COMPLETED'), findsOneWidget);
+
+    // Verifikasi item ditampilkan semua di kartu
+    expect(find.text('1x Ikan Kerapu Tumis Size M'), findsOneWidget);
+    expect(find.text('1x Kelapa bulat'), findsOneWidget);
+    expect(find.text('1x Jus Mangga'), findsOneWidget);
+
+    // Verifikasi subtotal item
+    expect(find.text('Rp 55.000'), findsOneWidget);
+    expect(find.text('Rp 20.000'), findsNWidgets(2));
+
+    // Verifikasi total belanja gabungan
+    expect(find.text('3 item • CASH'), findsOneWidget);
+    expect(find.text('Rp 95.000'), findsOneWidget);
+  });
+
+  testWidgets('DetailTransaksiDialog menampilkan rincian multi-item bill', (WidgetTester tester) async {
+    final group = TransactionGroup(
+      idTransaksi: 'TRX-MULTI-01',
+      customerName: 'Indah',
+      waktu: '2026-09-19T13:48:50.000000Z',
+      dicatatOleh: 'Admin Toko',
+      paymentMethod: 'CASH',
+      orderStatus: 'COMPLETED',
+      catatan: 'Catatan umum',
+      items: const [
+        TransactionModel(
+          idTransaksi: 'TRX-MULTI-01',
+          id: '1',
+          namaItem: 'Ikan Kerapu Tumis Size M',
+          jumlah: 1,
+          harga: 55000,
+          waktu: '2026-09-19T13:48:50.000000Z',
+          dicatatOleh: 'Admin Toko',
+          catatan: 'Pedas',
+          paymentMethod: 'CASH',
+          orderStatus: 'COMPLETED',
+          customerName: 'Indah',
+        ),
+        TransactionModel(
+          idTransaksi: 'TRX-MULTI-01',
+          id: '2',
+          namaItem: 'Kelapa bulat',
+          jumlah: 2,
+          harga: 20000,
+          waktu: '2026-09-19T13:48:50.000000Z',
+          dicatatOleh: 'Admin Toko',
+          catatan: '',
+          paymentMethod: 'CASH',
+          orderStatus: 'COMPLETED',
+          customerName: 'Indah',
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: DetailTransaksiDialog(group: group),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    // Verifikasi modal detail
+    expect(find.text('Detail Transaksi'), findsOneWidget);
+    expect(find.text('TRX-MULTI-01'), findsOneWidget);
+    expect(find.text('Pelanggan'), findsOneWidget);
+    expect(find.text('Indah'), findsOneWidget);
+    expect(find.text('Admin Toko'), findsOneWidget);
+    expect(find.text('Daftar Menu (2 item)'), findsOneWidget);
+    expect(find.text('Ikan Kerapu Tumis Size M'), findsOneWidget);
+    expect(find.text('Kelapa bulat'), findsOneWidget);
+    expect(find.text('Catatan: Pedas'), findsOneWidget);
+    expect(find.text('Total Belanja (3 porsi)'), findsOneWidget);
+    expect(find.text('Rp 95.000'), findsOneWidget);
+  });
 }
+
 
 
 

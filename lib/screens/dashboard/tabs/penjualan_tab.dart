@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../../data/models/transaction_model.dart';
+import '../../../data/models/transaction_group_model.dart';
 import '../../../services/transaction_service.dart';
 import '../../../widgets/app_card.dart';
 import '../../../widgets/app_dialog.dart';
@@ -27,7 +27,7 @@ class _PenjualanTabState extends State<PenjualanTab> {
   String _selectedFilter = 'Hari Ini';
   final List<String> _filterOptions = ['Hari Ini', 'Minggu Ini', 'Bulan Ini', 'Semua'];
 
-  List<TransactionModel> _transactions = [];
+  List<TransactionGroup> _transactionGroups = [];
   bool _isLoading = true;
 
   @override
@@ -52,7 +52,8 @@ class _PenjualanTabState extends State<PenjualanTab> {
       if (mounted) {
         setState(() {
           // Hanya menampilkan transaksi yang sudah selesai atau dibatalkan (bukan transaksi berjalan / PENDING)
-          _transactions = list.where((t) => t.orderStatus.toUpperCase() != 'PENDING').toList();
+          final nonPending = list.where((t) => t.orderStatus.toUpperCase() != 'PENDING').toList();
+          _transactionGroups = TransactionGroup.fromTransactionList(nonPending);
           _isLoading = false;
         });
       }
@@ -63,20 +64,21 @@ class _PenjualanTabState extends State<PenjualanTab> {
     }
   }
 
-  List<TransactionModel> get _filteredTransactions {
+  List<TransactionGroup> get _filteredTransactions {
     final query = _searchController.text.trim().toLowerCase();
-    if (query.isEmpty) return _transactions;
-    return _transactions.where((t) {
-      return t.namaItem.toLowerCase().contains(query) ||
-          t.customerName.toLowerCase().contains(query) ||
-          t.idTransaksi.toLowerCase().contains(query);
+    if (query.isEmpty) return _transactionGroups;
+    return _transactionGroups.where((g) {
+      final matchCust = g.customerName.toLowerCase().contains(query);
+      final matchId = g.idTransaksi.toLowerCase().contains(query);
+      final matchItems = g.items.any((i) => i.namaItem.toLowerCase().contains(query));
+      return matchCust || matchId || matchItems;
     }).toList();
   }
 
   double get _totalFilteredOmzet {
     return _filteredTransactions
-        .where((t) => t.orderStatus.toUpperCase() != 'CANCELLED')
-        .fold(0, (sum, t) => sum + t.totalHarga);
+        .where((g) => g.orderStatus.toUpperCase() != 'CANCELLED')
+        .fold(0.0, (sum, g) => sum + g.totalHarga);
   }
 
   String _formatRupiah(double amount) {
@@ -91,18 +93,21 @@ class _PenjualanTabState extends State<PenjualanTab> {
     return buffer.toString();
   }
 
-  Future<bool> _handleDeleteTransaction(TransactionModel trx) async {
+  Future<bool> _handleDeleteTransaction(TransactionGroup group) async {
+    final displayName = group.customerName.isNotEmpty && group.customerName != '-'
+        ? group.customerName
+        : group.idTransaksi;
     final confirm = await AppDialog.showConfirmation(
       context: context,
       title: 'Hapus Transaksi',
-      message: 'Hapus transaksi "${trx.namaItem}"?',
+      message: 'Hapus transaksi "$displayName"?',
       confirmText: 'Hapus',
       isDestructive: true,
     );
 
     if (confirm == true) {
       try {
-        await _transactionService.deleteTransaction(trx.idTransaksi);
+        await _transactionService.deleteTransaction(group.idTransaksi);
         _loadData();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -115,7 +120,7 @@ class _PenjualanTabState extends State<PenjualanTab> {
         return true;
       } catch (e) {
         try {
-          await _transactionService.cancelTransaction(trx.idTransaksi);
+          await _transactionService.cancelTransaction(group.idTransaksi);
           _loadData();
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -142,19 +147,16 @@ class _PenjualanTabState extends State<PenjualanTab> {
     return false;
   }
 
-  void _handlePrintAgain(TransactionModel trx) {
-    final sameTrxItems = _transactions.where((t) => t.idTransaksi == trx.idTransaksi).toList();
-    final itemsToUse = sameTrxItems.isNotEmpty ? sameTrxItems : [trx];
-
+  void _handlePrintAgain(TransactionGroup group) {
     SalesReceiptDialog.showFromTransactionList(
       context: context,
-      items: itemsToUse,
+      items: group.items,
       confirmButtonText: 'Cetak Ulang',
       autoPrint: false,
       onPrint: () {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Mencetak ulang struk ${trx.idTransaksi}...'),
+            content: Text('Mencetak ulang struk ${group.idTransaksi}...'),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -162,13 +164,13 @@ class _PenjualanTabState extends State<PenjualanTab> {
     );
   }
 
-  void _showDetailTransaction(TransactionModel trx) {
+  void _showDetailTransaction(TransactionGroup group) {
     DetailTransaksiDialog.show(
       context: context,
-      trx: trx,
+      group: group,
       cancelText: widget.canAddTransaction ? 'Batalkan' : 'Hapus Transaksi',
-      onPrintAgain: () => _handlePrintAgain(trx),
-      onCancel: () => _handleDeleteTransaction(trx),
+      onPrintAgain: () => _handlePrintAgain(group),
+      onCancel: () => _handleDeleteTransaction(group),
     );
   }
 
@@ -269,7 +271,7 @@ class _PenjualanTabState extends State<PenjualanTab> {
                     ],
                   ),
                   Text(
-                    '${transactions.length} Data',
+                    '${transactions.length} Transaksi',
                     style: theme.textTheme.labelMedium?.copyWith(
                       fontWeight: FontWeight.w600,
                     ),
@@ -300,11 +302,11 @@ class _PenjualanTabState extends State<PenjualanTab> {
                 ),
               )
             else
-              ...transactions.map((trx) {
+              ...transactions.map((group) {
                 return RiwayatTransaksiCard(
-                  trx: trx,
-                  onTap: () => _showDetailTransaction(trx),
-                  onDelete: () => _handleDeleteTransaction(trx),
+                  group: group,
+                  onTap: () => _showDetailTransaction(group),
+                  onDelete: () => _handleDeleteTransaction(group),
                 );
               }),
           ],

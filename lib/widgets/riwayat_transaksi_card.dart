@@ -1,19 +1,24 @@
 import 'package:flutter/material.dart';
+import '../data/models/transaction_group_model.dart';
 import '../data/models/transaction_model.dart';
 import 'app_badge.dart';
 import 'app_card.dart';
 
 class RiwayatTransaksiCard extends StatelessWidget {
-  final TransactionModel trx;
+  final TransactionGroup? group;
+  final TransactionModel? trx;
   final VoidCallback? onTap;
   final Future<bool?> Function()? onDelete;
 
   const RiwayatTransaksiCard({
     super.key,
-    required this.trx,
+    this.group,
+    this.trx,
     this.onTap,
     this.onDelete,
-  });
+  }) : assert(group != null || trx != null, 'Either group or trx must be provided');
+
+  TransactionGroup get _effectiveGroup => group ?? TransactionGroup.fromSingleTransaction(trx!);
 
   String _formatRupiah(double amount) {
     final str = amount.toInt().toString();
@@ -30,9 +35,10 @@ class RiwayatTransaksiCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isCancelled = trx.orderStatus.toUpperCase() == 'CANCELLED';
-    final customerDisplayName = trx.customerName.isNotEmpty && trx.customerName != '-'
-        ? trx.customerName
+    final effectiveGroup = _effectiveGroup;
+    final isCancelled = effectiveGroup.orderStatus.toUpperCase() == 'CANCELLED';
+    final customerDisplayName = effectiveGroup.customerName.isNotEmpty && effectiveGroup.customerName != '-'
+        ? effectiveGroup.customerName
         : 'Pelanggan';
 
     final cardWidget = Padding(
@@ -63,7 +69,7 @@ class RiwayatTransaksiCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          trx.idTransaksi,
+                          effectiveGroup.idTransaksi,
                           style: theme.textTheme.labelSmall?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant,
                             fontSize: 11,
@@ -75,53 +81,124 @@ class RiwayatTransaksiCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  AppBadge.status(trx.orderStatus),
+                  AppBadge.status(effectiveGroup.orderStatus),
                 ],
               ),
               const Divider(height: 14),
 
-              // Body: Nama Item & Rincian (Tanpa tombol Batal fisik)
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+              // Body: Jika multi-item tampilkan daftar item & total, jika single-item format ringkas
+              if (effectiveGroup.isMultiItem) ...[
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ...effectiveGroup.items.map((item) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '${item.jumlah}x ${item.namaItem}',
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                      fontWeight: FontWeight.w500,
+                                      decoration: isCancelled ? TextDecoration.lineThrough : null,
+                                    ),
+                                  ),
+                                  if (item.catatan.isNotEmpty)
+                                    Text(
+                                      'Catatan: ${item.catatan}',
+                                      style: theme.textTheme.bodySmall?.copyWith(
+                                        fontStyle: FontStyle.italic,
+                                        color: theme.colorScheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              _formatRupiah(item.totalHarga),
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                    const Divider(height: 14),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          trx.namaItem,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                            decoration: isCancelled ? TextDecoration.lineThrough : null,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '${trx.jumlah} x ${_formatRupiah(trx.harga)} • ${trx.paymentMethod}',
+                          '${effectiveGroup.totalQuantity} item • ${effectiveGroup.paymentMethod}',
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant,
                           ),
                         ),
-                        if (trx.catatan.isNotEmpty) ...[
-                          const SizedBox(height: 2),
-                          Text(
-                            'Catatan: ${trx.catatan}',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              fontStyle: FontStyle.italic,
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
+                        Text(
+                          _formatRupiah(effectiveGroup.totalHarga),
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: isCancelled ? theme.colorScheme.error : theme.colorScheme.primary,
                           ),
-                        ],
+                        ),
                       ],
                     ),
-                  ),
-                  Text(
-                    _formatRupiah(trx.totalHarga),
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
+              ] else ...[
+                Builder(
+                  builder: (context) {
+                    final singleItem = effectiveGroup.items.first;
+                    return Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                singleItem.namaItem,
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  decoration: isCancelled ? TextDecoration.lineThrough : null,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '${singleItem.jumlah} x ${_formatRupiah(singleItem.harga)} • ${effectiveGroup.paymentMethod}',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                              if (singleItem.catatan.isNotEmpty) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Catatan: ${singleItem.catatan}',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    fontStyle: FontStyle.italic,
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        Text(
+                          _formatRupiah(effectiveGroup.totalHarga),
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ],
             ],
           ),
         ),
@@ -158,7 +235,7 @@ class RiwayatTransaksiCard extends StatelessWidget {
     );
 
     return Dismissible(
-      key: ValueKey('dismiss_trx_${trx.idTransaksi}_${trx.id}'),
+      key: ValueKey('dismiss_trx_${effectiveGroup.idTransaksi}'),
       direction: DismissDirection.endToStart,
       confirmDismiss: (direction) async {
         return await onDelete!();
