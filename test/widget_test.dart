@@ -9,6 +9,7 @@ import 'package:warungku/screens/dashboard/dashboard_dispatcher.dart';
 import 'package:warungku/screens/dashboard/owner_dashboard_screen.dart';
 import 'package:warungku/screens/dashboard/tabs/barang_tab.dart';
 import 'package:warungku/screens/dashboard/tabs/beranda_tab.dart';
+import 'package:warungku/screens/dashboard/tabs/laba_rugi_tab.dart';
 import 'package:warungku/screens/dashboard/tabs/penjualan_tab.dart';
 import 'package:warungku/screens/dashboard/tabs/profil_tab.dart';
 import 'package:warungku/services/token_manager.dart';
@@ -1245,6 +1246,67 @@ void main() {
     expect(find.text('Catatan: Pedas'), findsOneWidget);
     expect(find.text('Total Belanja (3 porsi)'), findsOneWidget);
     expect(find.text('Rp 95.000'), findsOneWidget);
+  });
+
+  testWidgets('LabaRugiTab menampilkan seluruh 9 urutan elemen UI sesuai acuan minimalis', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1080, 2600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+
+    bool openedMonthly = false;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: LabaRugiTab(
+            onOpenMonthlyReport: () {
+              openedMonthly = true;
+            },
+          ),
+        ),
+      ),
+    );
+
+    // Initial pump & settle (mock data load)
+    await tester.pumpAndSettle();
+
+    // 1. Header Halaman
+    expect(find.text('Laporan Keuangan'), findsOneWidget);
+    expect(find.text('Analisis Performa Warung'), findsOneWidget);
+
+    // 2. Banner Card Laporan Bulanan per Item & Tombol
+    expect(find.text('Laporan Bulanan per Item'), findsOneWidget);
+    expect(find.text('Lihat rincian penjualan harian untuk setiap barang.'), findsOneWidget);
+    final openItemBtn = find.text('Buka Laporan Item');
+    expect(openItemBtn, findsOneWidget);
+    await tester.tap(openItemBtn);
+    expect(openedMonthly, isTrue);
+
+    // 3. Ringkasan Laba-Rugi + Tombol PDF
+    expect(find.text('Ringkasan Laba-Rugi'), findsOneWidget);
+    expect(find.byTooltip('Export PDF'), findsOneWidget);
+    expect(find.text('PDF'), findsOneWidget);
+
+    // 4. ChoiceChips Filter Periode
+    expect(find.text('Hari Ini'), findsOneWidget);
+    expect(find.text('Bulan Ini'), findsWidgets);
+
+    // 5. Card Rekap Performa
+    expect(find.text('Total Penjualan'), findsOneWidget);
+    expect(find.text('Total Pengeluaran'), findsOneWidget);
+    expect(find.text('Laba Bersih:'), findsOneWidget);
+
+    // 6. Section Rincian Harian
+    expect(find.text('Rincian Harian'), findsOneWidget);
+
+    // 7. Section Rincian Pengeluaran
+    expect(find.text('Rincian Pengeluaran'), findsOneWidget);
+
+    // 8. Section Daftar Transaksi Per Struk
+    expect(find.textContaining('Daftar Transaksi Per Struk'), findsOneWidget);
+
+    // 9. Section Menu Terlaris
+    expect(find.textContaining('Menu Terlaris'), findsOneWidget);
   });
 }
 

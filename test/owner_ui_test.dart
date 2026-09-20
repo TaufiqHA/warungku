@@ -97,6 +97,10 @@ void main() {
   });
 
   testWidgets('LabaRugiTab menampilkan neraca laba bersih, filter periode, rincian beban, dan tombol laporan bulanan', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1080, 2600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+
     bool openReportClicked = false;
 
     await tester.pumpWidget(
@@ -115,22 +119,23 @@ void main() {
     expect(find.text('Hari Ini'), findsOneWidget);
     expect(find.text('Kemarin'), findsOneWidget);
     expect(find.text('Minggu Ini'), findsOneWidget);
-    expect(find.text('Bulan Ini'), findsOneWidget);
+    expect(find.text('Bulan Ini'), findsWidgets);
     expect(find.text('Pilih Rentang'), findsOneWidget);
 
     // Verifikasi kartu neraca
     expect(find.textContaining('Laba Bersih'), findsOneWidget);
-    expect(find.text('Total Pendapatan'), findsOneWidget);
+    expect(find.text('Total Penjualan'), findsOneWidget);
     expect(find.text('Total Pengeluaran'), findsOneWidget);
 
     // Verifikasi rincian pengeluaran per tanggal
     expect(find.text('Rincian Pengeluaran'), findsOneWidget);
 
-    // Verifikasi tombol Buka Laporan Bulanan
-    expect(find.text('Laporan Bulanan'), findsOneWidget);
-    expect(find.text('Buka'), findsOneWidget);
+    // Verifikasi tombol Buka Laporan Item
+    expect(find.text('Laporan Bulanan per Item'), findsOneWidget);
+    final openBtn = find.text('Buka Laporan Item');
+    expect(openBtn, findsOneWidget);
 
-    await tester.tap(find.text('Buka'));
+    await tester.tap(openBtn);
     await tester.pump();
     expect(openReportClicked, true);
   });
@@ -350,7 +355,7 @@ void main() {
     expect(find.byType(PenjualanTab, skipOffstage: false), findsNothing); // Tetap tidak pernah diinstansiasi
   });
 
-  testWidgets('LabaRugiTab otomatis memuat dan menampilkan Riwayat Penjualan per Tanggal saat diakses', (WidgetTester tester) async {
+  testWidgets('LabaRugiTab otomatis memuat dan menampilkan Rincian Harian saat diakses', (WidgetTester tester) async {
     await tester.pumpWidget(
       const MaterialApp(
         home: Scaffold(
@@ -361,8 +366,8 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
 
-    // Verifikasi seksi Riwayat Penjualan per Tanggal otomatis tampil tanpa tombol manual
-    expect(find.text('Riwayat Penjualan per Tanggal'), findsOneWidget);
+    // Verifikasi seksi Rincian Harian otomatis tampil tanpa tombol manual
+    expect(find.text('Rincian Harian'), findsOneWidget);
     expect(find.text('Muat Data Penjualan'), findsNothing);
   });
 }

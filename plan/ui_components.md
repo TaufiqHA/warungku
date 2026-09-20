@@ -65,6 +65,17 @@ Dokumen ini berfungsi sebagai katalog sentral untuk seluruh elemen dan komponen 
 
 ## 3. Log Pembuatan & Perubahan Komponen
 
+- `2026-09-20`: **Penataan Ulang Tata Letak & Urutan Elemen UI Tab Laba Rugi (Owner)** (`lib/screens/dashboard/tabs/laba_rugi_tab.dart`). Tata letak disusun secara presisi mengikuti 9 urutan gambar referensi dengan tetap mempertahankan skema warna minimalis aplikasi Warungku (Material 3 surface, border outlineVariant tipis, tanpa warna norak/neon):
+  1. Header halaman: "Laporan Keuangan" & "Analisis Performa Warung".
+  2. Banner Card "Laporan Bulanan per Item" dengan tombol "Buka Laporan Item" (navigasi ke `MonthlyReportScreen`).
+  3. Baris Header "Ringkasan Laba-Rugi" dengan tombol aksi icon PDF (memicu `MonthlyReportPdfService.printMonthlyReport`).
+  4. ChoiceChips pilihan filter periode horizontal (Hari Ini, Kemarin, Minggu Ini, Bulan Ini, Bulan Lalu, Semua, Pilih Rentang).
+  5. Card Rekap Performa: Total Penjualan, Total Pengeluaran (`- Rp ...`), Divider tipis, dan Laba Bersih (merah/hijau sesuai surplus/defisit).
+  6. Section Rincian Harian: daftar tanggal dengan nominal omzet penjualan yang dapat di-expand (akordeon `ExpansionTile`) menampilkan daftar struk transaksi di hari tersebut (`TRX-...`, jam · kuantitas item, nominal) dengan tap untuk melihat `DetailTransaksiDialog`.
+  7. Section Rincian Pengeluaran: daftar pengeluaran terkelompokkan per tanggal (`X pengeluaran • - Rp ...`).
+  8. Section Daftar Transaksi Per Struk: daftar bill transaksi individual dari `TransactionGroup` dengan badge status `Berhasil • METODE` dan nominal.
+  9. Section Menu Terlaris: peringkat produk makanan/minuman terlaris (#1, #2, dst.) berdasarkan kuantitas porsi terjual dan total omzet belanja.
+
 - `2026-09-19`: **Pengelompokan bill transaksi multi-item pada Tab Penjualan** (Owner & Admin Toko). Item-item belanja yang berasal dari satu nomor transaksi yang sama (`idTransaksi`) digabung menjadi satu bill menggunakan model data baru `TransactionGroup` (`lib/data/models/transaction_group_model.dart`). Pembaruan mencakup: (1) `RiwayatTransaksiCard` kini menampilkan rincian tiap menu belanja beserta kuantitas dan harga, serta total akumulasi belanja (`X item • MetodeBayar` dan grand total); (2) `DetailTransaksiDialog` kini menampilkan daftar pesanan lengkap beserta cetak ulang seluruh item bill; (3) penghitung ringkasan atas kini menghitung jumlah transaksi / bill riil (`X Transaksi`).
 
 - `2026-09-18`: **Format ribuan otomatis pada input harga** modal Tambah/Edit Menu (`BarangTab`). User mengetik `15000` dan field langsung menampilkan `15.000`; yang dikirim ke API tetap angka penuh (`AngkaRibuan.parse`), sehingga validator lama (`double.tryParse`) yang berisiko membaca `15.000` sebagai 15 rupiah ikut diganti. Komponen: utilitas baru `AngkaRibuan` + `RibuanInputFormatter` (`lib/core/utils/angka_ribuan.dart`), dan `AppTextField` mendapat properti `inputFormatters` agar formatter bisa dipasang pada input nominal mana pun. Saat mengedit menu, harga awal juga langsung tampil bertitik.
