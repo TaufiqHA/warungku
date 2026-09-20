@@ -73,8 +73,25 @@ class TanggalFormatter {
     final iso = DateTime.tryParse(raw);
     if (iso != null) return iso;
 
-    // Format tampilan: "18 Sep 2026" / "18 September 2026".
-    final parts = raw.split(RegExp(r'\s+'));
+    // Bersihkan nama hari jika ada (misal: "Minggu, 20 September 2026")
+    final withoutDayName = raw.contains(',') ? raw.split(',').last.trim() : raw;
+    final isoFromClean = DateTime.tryParse(withoutDayName);
+    if (isoFromClean != null) return isoFromClean;
+
+    // Format angka: DD-MM-YYYY atau DD/MM/YYYY
+    final dmyRegex = RegExp(r'^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$');
+    final dmyMatch = dmyRegex.firstMatch(withoutDayName);
+    if (dmyMatch != null) {
+      final d = int.tryParse(dmyMatch.group(1)!);
+      final m = int.tryParse(dmyMatch.group(2)!);
+      final y = int.tryParse(dmyMatch.group(3)!);
+      if (d != null && m != null && y != null && m >= 1 && m <= 12) {
+        return DateTime(y, m, d);
+      }
+    }
+
+    // Format tampilan teks: "18 Sep 2026" / "18 September 2026"
+    final parts = withoutDayName.split(RegExp(r'\s+'));
     if (parts.length != 3) return null;
 
     final day = int.tryParse(parts[0].replaceAll(RegExp(r'[^0-9]'), ''));

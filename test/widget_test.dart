@@ -1,6 +1,9 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:warungku/core/utils/tanggal_formatter.dart';
 import 'package:warungku/data/models/auth_model.dart';
 import 'package:warungku/main.dart';
@@ -14,6 +17,8 @@ import 'package:warungku/screens/dashboard/tabs/laba_rugi_tab.dart';
 import 'package:warungku/screens/dashboard/tabs/penjualan_tab.dart';
 import 'package:warungku/screens/dashboard/tabs/profil_tab.dart';
 import 'package:warungku/services/token_manager.dart';
+import 'package:warungku/services/transaction_service.dart';
+import 'package:warungku/services/expense_service.dart';
 import 'package:warungku/screens/transaksi/transaksi_penjualan_screen.dart';
 import 'package:warungku/data/models/product_model.dart';
 import 'package:warungku/data/models/transaction_model.dart';
@@ -1417,6 +1422,85 @@ void main() {
     expect(t8.isCompleted, isFalse);
   });
 
+  test('LabaRugiTab.isDateInRange menyaring tanggal ISO dan format teks API pengeluaran', () {
+    final start = DateTime(2026, 9, 1);
+    final end = DateTime(2026, 9, 20);
+
+    // Tanggal teks API pengeluaran ("11 Sep 2026") harus ikut tersaring.
+    expect(LabaRugiTab.isDateInRange('11 Sep 2026', start, end), isTrue);
+    expect(LabaRugiTab.isDateInRange('31 Agu 2026', start, end), isFalse);
+    expect(LabaRugiTab.isDateInRange('21 Sep 2026', start, end), isFalse);
+
+    // Format teks API dengan nama hari ("Minggu, 20 September 2026") harus ikut tersaring.
+    expect(LabaRugiTab.isDateInRange('Minggu, 20 September 2026', start, end), isTrue);
+    expect(LabaRugiTab.isDateInRange('Senin, 21 September 2026', start, end), isFalse);
+
+    // Batas rentang bersifat inklusif.
+    expect(LabaRugiTab.isDateInRange('1 Sep 2026', start, end), isTrue);
+    expect(LabaRugiTab.isDateInRange('20 Sep 2026', start, end), isTrue);
+
+    // Transaksi ISO lokal.
+    expect(LabaRugiTab.isDateInRange('2026-09-11T10:15:30', start, end), isTrue);
+    expect(LabaRugiTab.isDateInRange('2026-08-31T23:59:59', start, end), isFalse);
+
+    // Format tak dikenali tidak boleh lolos filter.
+    expect(LabaRugiTab.isDateInRange('', start, end), isFalse);
+    expect(LabaRugiTab.isDateInRange('bukan-tanggal', start, end), isFalse);
+  });
+
+  test('LabaRugiTab.localDate menormalkan tanggal server tanpa jam dan mengenali nama hari', () {
+    expect(LabaRugiTab.localDate('11 Sep 2026'), DateTime(2026, 9, 11));
+    expect(LabaRugiTab.localDate('Minggu, 20 September 2026'), DateTime(2026, 9, 20));
+    expect(LabaRugiTab.localDate('Senin, 11 Sep 2026'), DateTime(2026, 9, 11));
+    expect(LabaRugiTab.localDate('20-09-2026'), DateTime(2026, 9, 20));
+    expect(LabaRugiTab.localDate('20/09/2026'), DateTime(2026, 9, 20));
+    expect(LabaRugiTab.localDate('2026-09-11T10:15:30'), DateTime(2026, 9, 11));
+    expect(LabaRugiTab.localDate('bukan-tanggal'), isNull);
+  });
+
+  test('LabaRugiTab.dateRangeForFilter menghitung rentang tanggal presisi untuk semua opsi filter', () {
+    final fixedNow = DateTime(2026, 9, 20, 15, 30); // Hari Minggu, 20 September 2026
+
+    // 1. Hari Ini
+    final todayRange = LabaRugiTab.dateRangeForFilter('Hari Ini', now: fixedNow);
+    expect(todayRange, isNotNull);
+    expect(todayRange!.start, DateTime(2026, 9, 20));
+    expect(todayRange.end, DateTime(2026, 9, 20));
+
+    // 2. Kemarin
+    final yesterdayRange = LabaRugiTab.dateRangeForFilter('Kemarin', now: fixedNow);
+    expect(yesterdayRange, isNotNull);
+    expect(yesterdayRange!.start, DateTime(2026, 9, 19));
+    expect(yesterdayRange.end, DateTime(2026, 9, 19));
+
+    // 3. Minggu Ini (Senin 14 Sep - Minggu 20 Sep 2026)
+    final weekRange = LabaRugiTab.dateRangeForFilter('Minggu Ini', now: fixedNow);
+    expect(weekRange, isNotNull);
+    expect(weekRange!.start, DateTime(2026, 9, 14));
+    expect(weekRange.end, DateTime(2026, 9, 20));
+
+    // 4. Bulan Ini (1 Sep - 30 Sep 2026)
+    final monthRange = LabaRugiTab.dateRangeForFilter('Bulan Ini', now: fixedNow);
+    expect(monthRange, isNotNull);
+    expect(monthRange!.start, DateTime(2026, 9, 1));
+    expect(monthRange.end, DateTime(2026, 9, 30));
+
+    // 5. Bulan Lalu (1 Agu - 31 Agu 2026)
+    final lastMonthRange = LabaRugiTab.dateRangeForFilter('Bulan Lalu', now: fixedNow);
+    expect(lastMonthRange, isNotNull);
+    expect(lastMonthRange!.start, DateTime(2026, 8, 1));
+    expect(lastMonthRange.end, DateTime(2026, 8, 31));
+
+    // 6. Pilih Tanggal (Custom)
+    final customRange = DateTimeRange(start: DateTime(2026, 9, 5), end: DateTime(2026, 9, 10));
+    final customRes = LabaRugiTab.dateRangeForFilter('Pilih Tanggal', customRange: customRange, now: fixedNow);
+    expect(customRes, customRange);
+
+    // 7. Semua
+    final allRange = LabaRugiTab.dateRangeForFilter('Semua', now: fixedNow);
+    expect(allRange, isNull);
+  });
+
   test('Perhitungan omzet dan jumlah transaksi bill konsisten untuk multi-item dan status pesanan', () {
     final rawList = [
       // Transaksi 1: COMPLETED, 2 item (Total Rp 30.000)
@@ -1779,6 +1863,197 @@ void main() {
     expect(activeOnly.map((t) => t.idTransaksi), containsAll(['TRX-P1', 'TRX-P2', 'TRX-P3']));
     expect(activeOnly.map((t) => t.idTransaksi), isNot(contains('TRX-P4')));
     expect(activeOnly.map((t) => t.idTransaksi), isNot(contains('TRX-P5')));
+  });
+
+  test('LabaRugiTab.serverFiltersForRange memilih jendela server penutup terkecil', () {
+    const wita = Duration(hours: 8);
+    // Minggu, 20 September 2026 pukul 10:00 WITA (02:00 UTC).
+    final now = DateTime(2026, 9, 20, 10);
+
+    List<String> filtersFor(
+      String filter, {
+      Duration tz = wita,
+      DateTimeRange? custom,
+    }) {
+      return LabaRugiTab.serverFiltersForRange(
+        localRange: LabaRugiTab.dateRangeForFilter(
+          filter,
+          customRange: custom,
+          now: now,
+        ),
+        tzOffset: tz,
+        now: now,
+      );
+    }
+
+    // Hari berjalan & kemarin cukup lewat jendela Minggu Ini (7 hari), bukan
+    // seluruh riwayat.
+    expect(filtersFor('Hari Ini'), ['Minggu Ini']);
+    expect(filtersFor('Kemarin'), ['Minggu Ini']);
+
+    // Minggu berjalan mulai 8 jam sebelum Senin versi UTC, sehingga hanya
+    // jendela bulanan yang menutupinya.
+    expect(filtersFor('Minggu Ini'), ['Bulan Ini']);
+
+    // Awal bulan lokal jatuh di akhir bulan UTC, jadi perlu dua jendela.
+    expect(filtersFor('Bulan Ini'), ['Bulan Lalu', 'Bulan Ini']);
+
+    // Bulan lalu tidak dapat ditutup karena jendela Juli tidak tersedia di API
+    // (batas zona UTC-nya jatuh di 31 Juli), sehingga kembali ke seluruh riwayat.
+    expect(filtersFor('Bulan Lalu'), ['Semua']);
+    expect(filtersFor('Semua'), ['Semua']);
+
+    // Rentang kustom yang seluruhnya berada di dalam satu jendela.
+    expect(
+      filtersFor(
+        'Pilih Tanggal',
+        custom: DateTimeRange(
+          start: DateTime(2026, 9, 10),
+          end: DateTime(2026, 9, 12),
+        ),
+      ),
+      ['Bulan Ini'],
+    );
+    expect(
+      filtersFor(
+        'Pilih Tanggal',
+        custom: DateTimeRange(
+          start: DateTime(2026, 8, 5),
+          end: DateTime(2026, 8, 20),
+        ),
+      ),
+      ['Bulan Lalu'],
+    );
+    expect(
+      filtersFor(
+        'Pilih Tanggal',
+        custom: DateTimeRange(
+          start: DateTime(2026, 8, 5),
+          end: DateTime(2026, 9, 10),
+        ),
+      ),
+      ['Bulan Lalu', 'Bulan Ini'],
+    );
+
+    // Pengeluaran memakai tanggal kalender lokal sehingga tidak digeser zona.
+    expect(filtersFor('Hari Ini', tz: Duration.zero), ['Hari Ini']);
+    expect(filtersFor('Minggu Ini', tz: Duration.zero), ['Minggu Ini']);
+    expect(filtersFor('Bulan Ini', tz: Duration.zero), ['Bulan Ini']);
+    expect(filtersFor('Bulan Lalu', tz: Duration.zero), ['Bulan Lalu']);
+  });
+
+  testWidgets('LabaRugiTab memuat periode terpilih dan memakai ulang cache saat ganti filter',
+      (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1080, 2600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+
+    TransactionService.clearCache();
+    ExpenseService.clearCache();
+
+    final now = DateTime.now();
+    final todayNoonUtc =
+        DateTime(now.year, now.month, now.day, 12).toUtc().toIso8601String();
+    final todayIso = TanggalFormatter.keIso(now);
+
+    http.Response ok(Map<String, dynamic> body) => http.Response(
+          jsonEncode(body),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+
+    final trxRequests = <String>[];
+    final trxClient = MockClient((request) async {
+      trxRequests.add(request.url.queryParameters['filter'] ?? 'Semua');
+      return ok({
+        'success': true,
+        'data': [
+          {
+            'idTransaksi': 'TRX-001',
+            'id': 'PRD-001',
+            'namaItem': 'Ayam Geprek',
+            'jumlah': 2,
+            'harga': 15000.0,
+            'waktu': todayNoonUtc,
+            'dicatatOleh': 'Admin Toko',
+            'catatan': '',
+            'payment_method': 'CASH',
+            'orderStatus': 'COMPLETED',
+            'customerName': 'Meja 1',
+            'servedQty': 0,
+          },
+        ],
+      });
+    });
+
+    final expRequests = <String>[];
+    final expClient = MockClient((request) async {
+      expRequests.add(request.url.queryParameters['filter'] ?? 'Semua');
+      return ok({
+        'success': true,
+        'data': [
+          {
+            'id': 'EXP-001',
+            'jumlah': 10000.0,
+            'kategori': 'Bahan Baku',
+            'keterangan': 'Ayam',
+            'tanggal': todayIso,
+            'date': todayIso,
+            'pembuat': 'Admin Kantor',
+          },
+        ],
+      });
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: LabaRugiTab(
+            transactionService: TransactionService(client: trxClient),
+            expenseService: ExpenseService(client: expClient),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final tzOffset = DateTime.now().timeZoneOffset;
+    final expectedMonth = LabaRugiTab.serverFiltersForRange(
+      localRange: LabaRugiTab.dateRangeForFilter('Bulan Ini'),
+      tzOffset: tzOffset,
+    );
+
+    // Filter default 'Bulan Ini' hanya mengunduh periode penutupnya.
+    expect(trxRequests.toSet(), expectedMonth.toSet());
+    expect(expRequests.toSet(), isNotEmpty);
+
+    // Data periode terpilih tetap tampil dan dihitung dengan benar.
+    expect(find.text('Rp 30.000'), findsWidgets);
+    expect(find.text('- Rp 10.000'), findsWidgets);
+    expect(find.text('Rp 20.000'), findsOneWidget);
+
+    // Ganti ke 'Hari Ini': hanya filter yang belum tercache yang diunduh.
+    final before = trxRequests.length;
+    await tester.tap(find.text('Hari Ini'));
+    await tester.pumpAndSettle();
+
+    final expectedToday = LabaRugiTab.serverFiltersForRange(
+      localRange: LabaRugiTab.dateRangeForFilter('Hari Ini'),
+      tzOffset: tzOffset,
+    );
+    final expectedNewToday =
+        expectedToday.where((f) => !expectedMonth.contains(f)).toList();
+    expect(trxRequests.length, before + expectedNewToday.length);
+    expect(trxRequests.sublist(before).toSet(), expectedNewToday.toSet());
+
+    // Kembali ke 'Bulan Ini': hasil cache dipakai, tanpa permintaan baru.
+    final beforeBack = trxRequests.length;
+    await tester.tap(find.text('Bulan Ini'));
+    await tester.pumpAndSettle();
+    expect(trxRequests.length, beforeBack);
+
+    TransactionService.clearCache();
+    ExpenseService.clearCache();
   });
 }
 

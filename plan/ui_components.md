@@ -30,6 +30,7 @@ Dokumen ini berfungsi sebagai katalog sentral untuk seluruh elemen dan komponen 
 | `AppButton` | `lib/widgets/app_button.dart` | Tombol aksi primer/sekunder dengan loading state dan kustomisasi warna | `text`, `onPressed`, `isLoading`, `isPrimary`, `icon`, `backgroundColor`, `foregroundColor`, `disabledBackgroundColor` | Login, Kasir, Pengaturan, Form, Transaksi Penjualan |
 | `AppTextField` | `lib/widgets/app_text_field.dart` | Input teks seragam dengan border melengkung halus dan fleksibilitas label | `label`, `controller`, `hintText`, `readOnly`, `showLabelAbove`, `keyboardType`, `obscureText`, `prefixIcon`, `suffixIcon`, `validator`, `inputFormatters` | Login, Form Barang, Form Pengguna, Form Biaya, Transaksi Penjualan |
 | `AppCard` | `lib/widgets/app_card.dart` | Kartu kontainer minimalis dengan border tipis dan elevasi rendah | `child`, `padding`, `margin`, `backgroundColor`, `borderRadius`, `elevation` | Login, Dashboard, Ringkasan Transaksi, Buat Pesanan |
+| `AppSliverCard` | `lib/widgets/app_sliver_card.dart` | Versi sliver dari `AppCard` (`DecoratedSliver`) untuk kartu berisi daftar panjang agar barisnya dibangun lazy saat digulir, bukan `shrinkWrap` | `sliver`, `innerPadding`, `outerPadding`, `backgroundColor`, `borderRadius` | LabaRugiTab (Rincian Harian, Rincian Pengeluaran, Daftar Transaksi Per Struk, Menu Terlaris) |
 | `AppBadge` | `lib/widgets/app_badge.dart` | Badge status (pesanan/transaksi) dan badge role hak akses | `text`, `backgroundColor`, `textColor`, `icon`, `factory role()`, `factory status()` | Dashboard, Tab Penjualan, Profil |
 | `AppDialog` | `lib/widgets/app_dialog.dart` | Modal dialog konfirmasi terstandarisasi untuk aksi kritis | `title`, `message`, `confirmText`, `cancelText`, `isDestructive`, `isLoading` | Dashboard, Logout, Hapus Barang, Batal Transaksi |
 | `RoleGuard` | `lib/core/auth/role_guard.dart` | Komponen proteksi hak akses rute berdasarkan role pengguna | `allowedRole`, `child`, `testUser` | AdminTokoDashboard, OwnerDashboard, AdminKantorDashboard |
@@ -65,6 +66,13 @@ Dokumen ini berfungsi sebagai katalog sentral untuk seluruh elemen dan komponen 
 ---
 
 ## 3. Log Pembuatan & Perubahan Komponen
+
+- `2026-09-20`: **Penyempurnaan Filtering Rekap Performa & Data Laba Rugi** (`lib/screens/dashboard/tabs/laba_rugi_tab.dart` & `lib/core/utils/tanggal_formatter.dart`). Memperbaiki filtering data agar 100% akurat untuk semua opsi (`Hari Ini`, `Kemarin`, `Minggu Ini`, `Bulan Ini`, `Bulan Lalu`, `Pilih Tanggal`, dan `Semua`):
+  1. Menambahkan helper `LabaRugiTab.dateRangeForFilter` untuk menghitung rentang tanggal lokal inklusif pada setiap filter cepat.
+  2. Menerapkan penyaringan client-side konsisten pada transaksi dan pengeluaran dengan penarikan data lengkap (`filter: 'Semua'` & `forceRefresh: true` saat filter berganti).
+  3. Memperluas `TanggalFormatter.parse()` agar mengenali string tanggal dari API yang memuat nama hari dan koma (misal: `"Minggu, 20 September 2026"`, `"Senin, 11 Sep 2026"`) serta format slash/dash (`DD-MM-YYYY` / `DD/MM/YYYY`).
+  4. Kartu Rekap Performa kini menampilkan label rentang tanggal aktif yang informatif pada header (misal `Rekap Performa (13 Sep - 20 Sep 2026)`) dan subtitle yang dinamis sesuai opsi jenis data terpilih (*Pengeluaran Saja*, *Pemasukan Saja*, *Omzet Penjualan Menu*).
+  5. Menyesuaikan perhitungan omzet penjualan dan beban pengeluaran di Rekap Performa secara proporsional sesuai opsi jenis data yang dipilih.
 
 - `2026-09-20`: **Sinkronisasi Metrik Omzet Hari Ini & Penghitung Bill Transaksi** (`lib/screens/dashboard/tabs/beranda_tab.dart`, `lib/screens/dashboard/tabs/penjualan_tab.dart`, `lib/data/models/transaction_group_model.dart`, `lib/services/auth_service.dart`). Menyelaraskan logika perhitungan antara kartu "Omzet Hari Ini" di Tab Beranda dan "Total Hari Ini" di Tab Penjualan. `BerandaTab` kini menggunakan `TransactionGroup.fromTransactionList` dari transaksi non-pending sehingga jumlah transaksi menghitung bill riil (bukan baris item mentah) dan nominal omzet hanya menghitung transaksi berstatus selesai (`isCompleted`). `AuthService.logout()` kini membersihkan cache statis in-memory untuk mencegah data transaksi tersisa saat pergantian akun antara Admin Toko dan Owner.
 
