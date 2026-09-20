@@ -5,17 +5,23 @@ class OrderanAktifGroup {
   final String transactionId;
   final String customerName;
   final String waktu;
+  final String orderStatus;
   final List<TransactionModel> items;
 
   OrderanAktifGroup({
     required this.transactionId,
     required this.customerName,
     required this.waktu,
+    this.orderStatus = 'PENDING',
     required this.items,
   });
 
   double get totalHarga => items.fold(0, (sum, item) => sum + item.totalHarga);
   bool get isAllServed => items.isNotEmpty && items.every((item) => item.servedQty >= item.jumlah);
+  bool get isReady =>
+      orderStatus.trim().toUpperCase() == 'READY' ||
+      orderStatus.trim().toUpperCase() == 'SIAP' ||
+      isAllServed;
 }
 
 class OrderanAktifCard extends StatelessWidget {
@@ -92,7 +98,7 @@ class OrderanAktifCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              if (group.isAllServed)
+              if (group.isReady)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
@@ -100,9 +106,9 @@ class OrderanAktifCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: const Color(0xFFA5D6A7), width: 0.8),
                   ),
-                  child: const Text(
-                    'Siap Bayar',
-                    style: TextStyle(
+                  child: Text(
+                    group.isAllServed ? 'Siap Bayar' : 'Siap Saji',
+                    style: const TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
                       color: Color(0xFF2E7D32),
@@ -311,7 +317,7 @@ class OrderanAktifCard extends StatelessWidget {
             width: double.infinity,
             height: 40,
             child: ElevatedButton(
-              onPressed: group.isAllServed ? onPayAndPrint : null,
+              onPressed: group.isReady ? onPayAndPrint : null,
               style: ElevatedButton.styleFrom(
                 backgroundColor: accentGreen,
                 foregroundColor: Colors.white,

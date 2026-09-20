@@ -197,5 +197,37 @@ void main() {
       // Nama kategori pada dialog utama berubah
       expect(find.text('Spesial Dapur'), findsOneWidget);
     });
+
+    testWidgets('AturUrutanPdfDialog.show menutup dialog modal saat Simpan Layout ditekan dan menampilkan feedback', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (ctx) => ElevatedButton(
+                onPressed: () => AturUrutanPdfDialog.show(ctx, initialProducts: testProducts),
+                child: const Text('Buka Modal'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Buka dialog modal
+      await tester.tap(find.text('Buka Modal'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Atur Urutan & Nama'), findsOneWidget);
+
+      // Tekan tombol Simpan Layout
+      await tester.tap(find.text('Simpan Layout'));
+      await tester.pumpAndSettle();
+
+      // Dialog modal tertutup
+      expect(find.textContaining('Atur Urutan & Nama'), findsNothing);
+
+      // Feedback SnackBar muncul
+      expect(find.text('Layout berhasil disimpan'), findsOneWidget);
+    });
   });
 }

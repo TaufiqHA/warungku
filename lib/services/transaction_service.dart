@@ -342,5 +342,30 @@ class TransactionService {
       throw Exception('Gagal menyelesaikan transaksi.');
     }
   }
+
+  Future<void> updateOrderStatus(String transactionId, String status) async {
+    try {
+      final headers = await _authHeaders();
+      final response = await _client.patch(
+        Uri.parse('${ApiConstants.transactionsEndpoint}/$transactionId/status'),
+        headers: headers,
+        body: jsonEncode({
+          'status': status.trim().toUpperCase(),
+        }),
+      );
+
+      if (response.statusCode != 200) {
+        final Map<String, dynamic> body = jsonDecode(response.body);
+        throw Exception(_parseErrorMessage(body, 'Gagal memperbarui status order'));
+      }
+      clearCache();
+    } on SocketException {
+      throw Exception('Gagal terhubung ke server.');
+    } catch (e) {
+      if (e is Exception) rethrow;
+      throw Exception('Gagal memperbarui status order.');
+    }
+  }
 }
+
 

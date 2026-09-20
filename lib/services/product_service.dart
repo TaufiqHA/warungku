@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -176,14 +177,21 @@ class ProductService {
         Uri.parse(ApiConstants.categoriesLayoutEndpoint),
         headers: headers,
         body: jsonEncode({'categories': categories}),
-      );
+      ).timeout(const Duration(seconds: 4));
 
-      final Map<String, dynamic> body = jsonDecode(response.body);
       if (response.statusCode != 200 && response.statusCode != 201) {
-        throw Exception(body['message'] ?? 'Gagal menyimpan urutan kategori');
+        try {
+          final Map<String, dynamic> body = jsonDecode(response.body);
+          throw Exception(body['message'] ?? 'Gagal menyimpan urutan kategori');
+        } catch (e) {
+          if (e is Exception && e.toString().contains('Gagal menyimpan')) rethrow;
+          throw Exception('Gagal menyimpan urutan kategori (${response.statusCode})');
+        }
       }
     } on SocketException {
       // Offline-first resilience
+    } on TimeoutException {
+      // Timeout resilience
     } catch (e) {
       if (e is Exception && !e.toString().contains('Gagal menyimpan')) {
         // Network/parse issue
@@ -200,14 +208,21 @@ class ProductService {
         Uri.parse(ApiConstants.productsLayoutEndpoint),
         headers: headers,
         body: jsonEncode({'products': products}),
-      );
+      ).timeout(const Duration(seconds: 4));
 
-      final Map<String, dynamic> body = jsonDecode(response.body);
       if (response.statusCode != 200 && response.statusCode != 201) {
-        throw Exception(body['message'] ?? 'Gagal menyimpan urutan produk');
+        try {
+          final Map<String, dynamic> body = jsonDecode(response.body);
+          throw Exception(body['message'] ?? 'Gagal menyimpan urutan produk');
+        } catch (e) {
+          if (e is Exception && e.toString().contains('Gagal menyimpan')) rethrow;
+          throw Exception('Gagal menyimpan urutan produk (${response.statusCode})');
+        }
       }
     } on SocketException {
       // Offline-first resilience
+    } on TimeoutException {
+      // Timeout resilience
     } catch (e) {
       if (e is Exception && !e.toString().contains('Gagal menyimpan')) {
         // Network/parse issue

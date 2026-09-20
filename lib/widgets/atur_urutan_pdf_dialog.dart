@@ -212,7 +212,7 @@ class _AturUrutanPdfDialogState extends State<AturUrutanPdfDialog> {
     return data;
   }
 
-  Future<void> _saveLayout({bool showSnackbar = true}) async {
+  Future<void> _saveLayout({bool showSnackbar = true, bool shouldPop = true}) async {
     setState(() => _isSaving = true);
 
     try {
@@ -228,7 +228,7 @@ class _AturUrutanPdfDialogState extends State<AturUrutanPdfDialog> {
         productOrderPerCategory: prodOrderMap,
       );
 
-      // 2. Simpan ke backend API
+      // 2. Simpan ke backend API (paralel dengan batas waktu)
       final catPayload = <Map<String, dynamic>>[];
       for (int i = 0; i < _categoryOrder.length; i++) {
         final cat = _categoryOrder[i];
@@ -237,7 +237,6 @@ class _AturUrutanPdfDialogState extends State<AturUrutanPdfDialog> {
           'order': i + 1,
         });
       }
-      await _productService.saveCategoriesLayout(catPayload);
 
       final prodPayload = <Map<String, dynamic>>[];
       int pOrder = 1;
@@ -249,26 +248,44 @@ class _AturUrutanPdfDialogState extends State<AturUrutanPdfDialog> {
           });
         }
       }
-      await _productService.saveProductsLayout(prodPayload);
+
+      try {
+        await Future.wait([
+          _productService.saveCategoriesLayout(catPayload),
+          _productService.saveProductsLayout(prodPayload),
+        ]).timeout(const Duration(seconds: 4));
+      } catch (_) {
+        // Sinkronisasi server yang lambat/gagal tidak menghalangi simpan lokal
+      }
 
       widget.onLayoutSaved?.call();
 
-      if (mounted && showSnackbar) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Layout berhasil disimpan'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+      if (mounted) {
+        if (showSnackbar) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Layout berhasil disimpan'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        if (shouldPop && Navigator.of(context).canPop()) {
+          Navigator.of(context).pop(true);
+        }
       }
     } catch (e) {
-      if (mounted && showSnackbar) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Tersimpan di perangkat lokal: ${e.toString().replaceFirst('Exception: ', '')}'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+      if (mounted) {
+        if (showSnackbar) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Tersimpan di perangkat lokal: ${e.toString().replaceFirst('Exception: ', '')}'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        if (shouldPop && Navigator.of(context).canPop()) {
+          Navigator.of(context).pop(true);
+        }
       }
     } finally {
       if (mounted) {
@@ -278,7 +295,7 @@ class _AturUrutanPdfDialogState extends State<AturUrutanPdfDialog> {
   }
 
   Future<void> _exportPdf() async {
-    await _saveLayout(showSnackbar: false);
+    await _saveLayout(showSnackbar: false, shouldPop: false);
     final data = _buildCategoryMenuData();
 
     if (!mounted) return;

@@ -1615,6 +1615,171 @@ void main() {
     final totalTodayOmzet = completedGroups.fold(0.0, (sum, g) => sum + g.totalHarga);
     expect(totalTodayOmzet, 64000.0);
   });
+
+  test('TransactionModel dan TransactionGroup mendukung status sampai READY dan isActiveOrder', () {
+    final tPending = TransactionModel.fromJson({'orderStatus': 'PENDING'});
+    expect(tPending.isActiveOrder, isTrue);
+    expect(tPending.isReady, isFalse);
+    expect(tPending.isCompleted, isFalse);
+
+    final tProses = TransactionModel.fromJson({'orderStatus': 'PROSES'});
+    expect(tProses.isActiveOrder, isTrue);
+    expect(tProses.isReady, isFalse);
+
+    final tProcessing = TransactionModel.fromJson({'orderStatus': 'PROCESSING'});
+    expect(tProcessing.isActiveOrder, isTrue);
+    expect(tProcessing.isReady, isFalse);
+
+    final tReady = TransactionModel.fromJson({'orderStatus': 'READY'});
+    expect(tReady.isActiveOrder, isTrue);
+    expect(tReady.isReady, isTrue);
+    expect(tReady.isCompleted, isFalse);
+
+    final tSiap = TransactionModel.fromJson({'orderStatus': 'SIAP'});
+    expect(tSiap.isActiveOrder, isTrue);
+    expect(tSiap.isReady, isTrue);
+
+    final tCompleted = TransactionModel.fromJson({'orderStatus': 'COMPLETED'});
+    expect(tCompleted.isActiveOrder, isFalse);
+    expect(tCompleted.isReady, isFalse);
+    expect(tCompleted.isCompleted, isTrue);
+
+    final tCancelled = TransactionModel.fromJson({'orderStatus': 'CANCELLED'});
+    expect(tCancelled.isActiveOrder, isFalse);
+    expect(tCancelled.isReady, isFalse);
+    expect(tCancelled.isCancelled, isTrue);
+
+    // Verifikasi pada TransactionGroup
+    final gReady = TransactionGroup.fromSingleTransaction(tReady);
+    expect(gReady.isActiveOrder, isTrue);
+    expect(gReady.isReady, isTrue);
+  });
+
+  testWidgets('OrderanAktifCard dengan status READY menampilkan badge Siap Saji dan mengaktifkan Bayar & Cetak', (WidgetTester tester) async {
+    bool payClicked = false;
+
+    final itemReady = const TransactionModel(
+      idTransaksi: 'TRX-READY-01',
+      id: 'PRD-01',
+      namaItem: 'Mie Goreng Spesial',
+      jumlah: 2,
+      harga: 18000,
+      waktu: '2026-09-20T12:00:00Z',
+      dicatatOleh: 'Kasir',
+      catatan: '',
+      paymentMethod: 'CASH',
+      orderStatus: 'READY',
+      customerName: 'Meja 7',
+      servedQty: 0, // Belum dicentang per item, tetapi status order dari dapur sudah READY
+    );
+
+    final groupReady = OrderanAktifGroup(
+      transactionId: 'TRX-READY-01',
+      customerName: 'Meja 7',
+      waktu: '2026-09-20T12:00:00Z',
+      orderStatus: 'READY',
+      items: [itemReady],
+    );
+
+    expect(groupReady.isReady, isTrue);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: OrderanAktifCard(
+            group: groupReady,
+            onPayAndPrint: () => payClicked = true,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    // Badge status harus menampilkan 'Siap Saji'
+    expect(find.text('Siap Saji'), findsOneWidget);
+
+    // Tombol Bayar & Cetak harus aktif dan bisa diklik
+    await tester.tap(find.text('Bayar & Cetak'));
+    await tester.pump();
+    expect(payClicked, isTrue);
+  });
+
+  test('Pemisahan Orderan Aktif di Beranda mencakup status sampai READY dan mengecualikan COMPLETED/CANCELLED', () {
+    final rawList = [
+      const TransactionModel(
+        idTransaksi: 'TRX-P1',
+        id: '1',
+        namaItem: 'Kopi',
+        jumlah: 1,
+        harga: 10000,
+        waktu: '2026-09-20T10:00:00Z',
+        dicatatOleh: 'Kasir',
+        catatan: '',
+        paymentMethod: 'CASH',
+        orderStatus: 'PENDING',
+        customerName: 'A',
+      ),
+      const TransactionModel(
+        idTransaksi: 'TRX-P2',
+        id: '2',
+        namaItem: 'Teh',
+        jumlah: 1,
+        harga: 5000,
+        waktu: '2026-09-20T10:05:00Z',
+        dicatatOleh: 'Kasir',
+        catatan: '',
+        paymentMethod: 'CASH',
+        orderStatus: 'PROSES',
+        customerName: 'B',
+      ),
+      const TransactionModel(
+        idTransaksi: 'TRX-P3',
+        id: '3',
+        namaItem: 'Roti',
+        jumlah: 1,
+        harga: 12000,
+        waktu: '2026-09-20T10:10:00Z',
+        dicatatOleh: 'Kasir',
+        catatan: '',
+        paymentMethod: 'CASH',
+        orderStatus: 'READY',
+        customerName: 'C',
+      ),
+      const TransactionModel(
+        idTransaksi: 'TRX-P4',
+        id: '4',
+        namaItem: 'Nasi',
+        jumlah: 1,
+        harga: 20000,
+        waktu: '2026-09-20T10:15:00Z',
+        dicatatOleh: 'Kasir',
+        catatan: '',
+        paymentMethod: 'CASH',
+        orderStatus: 'COMPLETED',
+        customerName: 'D',
+      ),
+      const TransactionModel(
+        idTransaksi: 'TRX-P5',
+        id: '5',
+        namaItem: 'Air',
+        jumlah: 1,
+        harga: 3000,
+        waktu: '2026-09-20T10:20:00Z',
+        dicatatOleh: 'Kasir',
+        catatan: '',
+        paymentMethod: 'CASH',
+        orderStatus: 'CANCELLED',
+        customerName: 'E',
+      ),
+    ];
+
+    // Filter aktif: status sampai READY (selain COMPLETED dan CANCELLED)
+    final activeOnly = rawList.where((t) => t.isActiveOrder).toList();
+    expect(activeOnly.length, 3);
+    expect(activeOnly.map((t) => t.idTransaksi), containsAll(['TRX-P1', 'TRX-P2', 'TRX-P3']));
+    expect(activeOnly.map((t) => t.idTransaksi), isNot(contains('TRX-P4')));
+    expect(activeOnly.map((t) => t.idTransaksi), isNot(contains('TRX-P5')));
+  });
 }
 
 

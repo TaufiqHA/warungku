@@ -69,32 +69,33 @@ class _BerandaTabState extends State<BerandaTab> {
         forceRefresh: forceRefresh,
       ).catchError((_) => <ProductModel>[]);
 
-      // Pastikan hanya memproses transaksi hari ini (waktu lokal)
-      final transactions = rawTransactions.where((t) => TanggalFormatter.isToday(t.waktu)).toList();
-
-      // Pisahkan transaksi PENDING (Orderan Aktif) dan yang sudah selesai/dibatalkan
-      final pendingTransactions = transactions.where((t) => t.isPending).toList();
-      final nonPendingTransactions = transactions.where((t) => !t.isPending).toList();
+      // Pisahkan transaksi aktif (status hingga READY, selain COMPLETED dan CANCELLED)
+      final activeTransactions = rawTransactions.where((t) => t.isActiveOrder).toList();
 
       // Kelompokkan Orderan Aktif per idTransaksi
       final Map<String, List<TransactionModel>> grouped = {};
-      for (final item in pendingTransactions) {
+      for (final item in activeTransactions) {
         grouped.putIfAbsent(item.idTransaksi, () => []).add(item);
       }
 
       final activeGroups = grouped.entries.map((entry) {
         final first = entry.value.first;
+        final orderStatus = entry.value
+            .map((e) => e.orderStatus)
+            .firstWhere((s) => s.isNotEmpty, orElse: () => first.orderStatus);
+
         return OrderanAktifGroup(
           transactionId: entry.key,
           customerName: first.customerName,
           waktu: first.waktu,
+          orderStatus: orderStatus,
           items: entry.value,
         );
       }).toList();
 
-      // Kelompokkan transaksi selesai per idTransaksi (bill riil)
-      final completedGroups = TransactionGroup.fromTransactionList(nonPendingTransactions)
-          .where((g) => g.isCompleted)
+      // Kelompokkan transaksi selesai hari ini per idTransaksi (bill riil)
+      final completedGroups = TransactionGroup.fromTransactionList(rawTransactions)
+          .where((g) => g.isCompleted && TanggalFormatter.isToday(g.waktu))
           .toList();
 
       // Hitung omzet hari ini hanya dari transaksi yang telah selesai (bukan dibatalkan/pending)
@@ -217,7 +218,7 @@ class _BerandaTabState extends State<BerandaTab> {
   }
 
   Future<void> _handlePayAndPrint(OrderanAktifGroup group) async {
-    if (!group.isAllServed) {
+    if (!group.isReady) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Pesanan belum siap bayar (makanan/minuman masih disiapkan)'),

@@ -27,7 +27,16 @@ class TransactionGroup {
 
   bool get isPending {
     final s = orderStatus.trim().toUpperCase();
-    return s == 'PENDING' || s == 'PROSES' || s == 'READY' || s == 'SIAP';
+    return s == 'PENDING' ||
+        s == 'PROSES' ||
+        s == 'PROCESSING' ||
+        s == 'READY' ||
+        s == 'SIAP';
+  }
+
+  bool get isReady {
+    final s = orderStatus.trim().toUpperCase();
+    return s == 'READY' || s == 'SIAP';
   }
 
   bool get isCancelled {
@@ -39,6 +48,8 @@ class TransactionGroup {
     final s = orderStatus.trim().toUpperCase();
     return s == 'COMPLETED' || s == 'SELESAI';
   }
+
+  bool get isActiveOrder => !isCompleted && !isCancelled;
 
   factory TransactionGroup.fromSingleTransaction(TransactionModel trx) {
     return TransactionGroup(

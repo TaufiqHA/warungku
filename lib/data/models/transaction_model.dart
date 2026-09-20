@@ -31,7 +31,16 @@ class TransactionModel {
 
   bool get isPending {
     final s = orderStatus.trim().toUpperCase();
-    return s == 'PENDING' || s == 'PROSES' || s == 'READY' || s == 'SIAP';
+    return s == 'PENDING' ||
+        s == 'PROSES' ||
+        s == 'PROCESSING' ||
+        s == 'READY' ||
+        s == 'SIAP';
+  }
+
+  bool get isReady {
+    final s = orderStatus.trim().toUpperCase();
+    return s == 'READY' || s == 'SIAP';
   }
 
   bool get isCancelled {
@@ -43,6 +52,8 @@ class TransactionModel {
     final s = orderStatus.trim().toUpperCase();
     return s == 'COMPLETED' || s == 'SELESAI';
   }
+
+  bool get isActiveOrder => !isCompleted && !isCancelled;
 
   factory TransactionModel.fromJson(Map<String, dynamic> json) {
     return TransactionModel(
