@@ -15,6 +15,8 @@ import 'package:warungku/services/thermal_printer_service.dart';
 import 'package:warungku/services/token_manager.dart';
 import 'package:warungku/widgets/detail_transaksi_dialog.dart';
 import 'package:warungku/data/models/transaction_model.dart';
+import 'package:warungku/data/models/transaction_group_model.dart';
+import 'package:warungku/widgets/riwayat_transaksi_card.dart';
 
 void main() {
   setUp(() async {
@@ -236,7 +238,7 @@ void main() {
     expect(find.text('Reset'), findsOneWidget);
   });
 
-  testWidgets('PenjualanTab untuk Owner (canAddTransaction: false) tidak menampilkan tombol Input Transaksi', (WidgetTester tester) async {
+  testWidgets('PenjualanTab untuk Owner (canAddTransaction: false) tidak menampilkan tombol Input Transaksi dan default filter Minggu Ini', (WidgetTester tester) async {
     await tester.pumpWidget(
       const MaterialApp(
         home: Scaffold(
@@ -250,6 +252,77 @@ void main() {
     // Verifikasi bahwa tombol Input Transaksi tidak ada pada layar
     expect(find.text('Input Transaksi'), findsNothing);
     expect(find.byType(FloatingActionButton), findsNothing);
+
+    // Verifikasi filter default otomatis Minggu Ini untuk Owner
+    expect(find.text('Minggu Ini'), findsOneWidget);
+    expect(find.text('Total Penjualan (Minggu Ini)'), findsOneWidget);
+
+    // Buka sheet filter via AppFilterPill
+    await tester.tap(find.text('Minggu Ini'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    // Verifikasi sheet filter terbuka dengan opsi periode
+    expect(find.text('Periode Penjualan'), findsOneWidget);
+    expect(find.text('Hari Ini'), findsOneWidget);
+    expect(find.text('Bulan Ini'), findsOneWidget);
+    expect(find.text('Semua'), findsOneWidget);
+
+    // Pilih opsi 'Bulan Ini'
+    await tester.tap(find.text('Bulan Ini'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    // Verifikasi header layar Penjualan Harian dan tombol refresh
+    expect(find.text('Penjualan Harian'), findsOneWidget);
+    expect(find.byIcon(Icons.refresh_rounded), findsWidgets);
+
+    // Verifikasi filter berubah
+    expect(find.text('Total Penjualan (Bulan Ini)'), findsOneWidget);
+  });
+
+  testWidgets('RiwayatTransaksiCard compact menampilkan avatar receipt, rincian waktu & item, badge bayar, dan panah detail', (WidgetTester tester) async {
+    final group = TransactionGroup(
+      idTransaksi: 'TRX-20260919132251',
+      customerName: 'Kak Jimmy',
+      waktu: '2026-09-19T13:22:51Z',
+      dicatatOleh: 'Admin Toko',
+      paymentMethod: 'CASH',
+      orderStatus: 'COMPLETED',
+      items: const [
+        TransactionModel(
+          idTransaksi: 'TRX-20260919132251',
+          id: '1',
+          namaItem: 'Ayam Geprek Sambal Korek',
+          jumlah: 2,
+          harga: 15000,
+          waktu: '2026-09-19T13:22:51Z',
+          dicatatOleh: 'Admin Toko',
+          catatan: '',
+          paymentMethod: 'CASH',
+          orderStatus: 'COMPLETED',
+          customerName: 'Kak Jimmy',
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: RiwayatTransaksiCard(group: group, isCompact: true),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Kak Jimmy'), findsOneWidget);
+    expect(find.text('TRX-20260919132251'), findsOneWidget);
+    expect(find.textContaining('19 Sep 2026, 13:22'), findsOneWidget);
+    expect(find.textContaining('2 item'), findsOneWidget);
+    expect(find.text('CASH'), findsOneWidget);
+    expect(find.text('Rp 30.000'), findsOneWidget);
+    expect(find.byIcon(Icons.keyboard_arrow_down_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.receipt_long_rounded), findsOneWidget);
   });
 
   testWidgets('TransaksiPenjualanScreen menampilkan Akses Ditolak jika dibuka oleh role Owner', (WidgetTester tester) async {

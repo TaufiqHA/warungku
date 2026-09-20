@@ -115,13 +115,15 @@ Berikut adalah rincian masing-masing tab di dalam Dashboard:
 - **Hak Akses**: Admin Toko, Owner.
 - **Komponen & Konten UI**:
   1. **Bar Filter & Pencarian**:
-     - *Pilihan Periode*: Hari Ini, Minggu Ini, Bulan Ini, Bulan Lalu, Semua.
      - *Field Search*: Mencari berdasarkan nama item, nama pemesan, atau nomor ID transaksi.
+     - *Filter Periode*: Tombol ringkas `AppFilterPill` terpadu berdampingan dengan kolom pencarian dengan modal sheet pemilih periode (Hari Ini, Minggu Ini, Bulan Ini, Semua).
+     - *Default Filter Periode*: Otomatis `Minggu Ini` khusus untuk role Owner, dan `Hari Ini` untuk kasir (Admin Toko).
   2. **Kartu Ringkasan**:
      - Menampilkan akumulasi omzet penjualan pada periode filter yang dipilih.
-  3. **Daftar Riwayat Penjualan (LazyColumn)**:
-     - Menampilkan kartu transaksi: ID transaksi, jam/tanggal, nama pemesan/meja, daftar menu & kuantitas, catatan, total harga, status badge, dan metode pembayaran.
-     - Tombol aksi pada tiap item: Detail, Cetak Ulang Struk, Batalkan Transaksi, dan Hapus Permanen (khusus Owner).
+  3. **Daftar Riwayat Penjualan (Pemisahan per Tanggal)**:
+     - Dikelompokkan berdasarkan tanggal transaksi dengan header "DAFTAR TRANSAKSI" (tanggal hari ini / grup teratas) dan header tanggal hijau (misal: "18 September 2026") untuk tanggal-tanggal sebelumnya.
+     - Kartu transaksi kompak bergaya receipt (`isCompact: true`): avatar receipt di kiri, nama pemesan / nomor ID transaksi, subtitle waktu (`19 Sep 2026, 13:23 · 4 item · ...`), badge metode bayar (CASH hijau, QRIS ungu), total harga hijau tebal, dan ikon panah detail.
+     - Aksi tap membuka dialog rincian lengkap bill (`DetailTransaksiDialog`), dan swipe kiri untuk hapus permanen (khusus Owner).
 - **Formulir & Dialog / Modal**:
   1. **Formulir Input Transaksi Cepat (`showAddForm`)**:
      - *Field Nama Barang*: Input nama makanan/minuman (dengan autocomplete saran barang).

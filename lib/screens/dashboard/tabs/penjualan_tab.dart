@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import '../../../core/utils/tanggal_formatter.dart';
 import '../../../data/models/transaction_group_model.dart';
 import '../../../services/transaction_service.dart';
 import '../../../widgets/app_card.dart';
 import '../../../widgets/app_dialog.dart';
+import '../../../widgets/app_filter_pill.dart';
 import '../../../widgets/detail_transaksi_dialog.dart';
 import '../../../widgets/riwayat_transaksi_card.dart';
 import '../../../widgets/sales_receipt_dialog.dart';
@@ -10,10 +12,12 @@ import '../../transaksi/transaksi_penjualan_screen.dart';
 
 class PenjualanTab extends StatefulWidget {
   final bool canAddTransaction;
+  final String? initialFilter;
 
   const PenjualanTab({
     super.key,
     this.canAddTransaction = true,
+    this.initialFilter,
   });
 
   @override
@@ -24,7 +28,8 @@ class _PenjualanTabState extends State<PenjualanTab> {
   final _transactionService = TransactionService();
 
   final _searchController = TextEditingController();
-  String _selectedFilter = 'Hari Ini';
+  late String _selectedFilter;
+  late final String _defaultFilter;
   final List<String> _filterOptions = ['Hari Ini', 'Minggu Ini', 'Bulan Ini', 'Semua'];
 
   List<TransactionGroup> _transactionGroups = [];
@@ -33,6 +38,8 @@ class _PenjualanTabState extends State<PenjualanTab> {
   @override
   void initState() {
     super.initState();
+    _defaultFilter = widget.initialFilter ?? (widget.canAddTransaction ? 'Hari Ini' : 'Minggu Ini');
+    _selectedFilter = _defaultFilter;
     _loadData();
   }
 
@@ -73,6 +80,29 @@ class _PenjualanTabState extends State<PenjualanTab> {
       final matchItems = g.items.any((i) => i.namaItem.toLowerCase().contains(query));
       return matchCust || matchId || matchItems;
     }).toList();
+  }
+
+  Map<String, List<TransactionGroup>> get _groupedTransactions {
+    final Map<String, List<TransactionGroup>> map = {};
+    for (final g in _filteredTransactions) {
+      String dateKey = g.waktu.trim();
+      if (dateKey.length >= 10) {
+        dateKey = dateKey.substring(0, 10);
+      }
+      map.putIfAbsent(dateKey, () => []).add(g);
+    }
+    for (final key in map.keys) {
+      map[key]!.sort((a, b) {
+        try {
+          final dtA = DateTime.parse(a.waktu);
+          final dtB = DateTime.parse(b.waktu);
+          return dtB.compareTo(dtA);
+        } catch (_) {
+          return 0;
+        }
+      });
+    }
+    return map;
   }
 
   double get _totalFilteredOmzet {
@@ -174,6 +204,74 @@ class _PenjualanTabState extends State<PenjualanTab> {
     );
   }
 
+  Future<void> _showFilterSheet() async {
+    final theme = Theme.of(context);
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      useRootNavigator: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      backgroundColor: theme.colorScheme.surface,
+      builder: (ctx) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(top: 12, bottom: 8),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.outlineVariant,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Periode Penjualan',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ),
+              ..._filterOptions.map((opt) {
+                final isSelected = _selectedFilter == opt;
+                return ListTile(
+                  dense: true,
+                  title: Text(
+                    opt,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                      color: isSelected
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.onSurface,
+                    ),
+                  ),
+                  trailing: isSelected
+                      ? Icon(Icons.check_rounded, color: theme.colorScheme.primary, size: 20)
+                      : null,
+                  onTap: () => Navigator.of(ctx).pop(opt),
+                );
+              }),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (selected != null && selected != _selectedFilter && mounted) {
+      setState(() => _selectedFilter = selected);
+      _loadData();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -204,48 +302,70 @@ class _PenjualanTabState extends State<PenjualanTab> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
           children: [
-            // Filter Periode
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: _filterOptions.map((opt) {
-                  final isSelected = _selectedFilter == opt;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: ChoiceChip(
-                      label: Text(opt),
-                      selected: isSelected,
-                      showCheckmark: false,
-                      onSelected: (selected) {
-                        if (selected && _selectedFilter != opt) {
-                          setState(() => _selectedFilter = opt);
-                          _loadData();
-                        }
-                      },
+            // 1. Header Layar
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Penjualan Harian',
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  );
-                }).toList(),
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            // Search Bar
-            AppCard(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              child: TextField(
-                controller: _searchController,
-                onChanged: (_) => setState(() {}),
-                decoration: const InputDecoration(
-                  icon: Icon(Icons.search, size: 20),
-                  hintText: 'Cari transaksi / pemesan...',
-                  border: InputBorder.none,
-                  isDense: true,
+                    const SizedBox(height: 2),
+                    Text(
+                      TanggalFormatter.lengkap(DateTime.now()),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
                 ),
-              ),
+                IconButton(
+                  onPressed: () => _loadData(forceRefresh: true),
+                  icon: Icon(Icons.refresh_rounded, color: theme.colorScheme.primary),
+                  tooltip: 'Refresh Data',
+                ),
+              ],
             ),
             const SizedBox(height: 12),
 
-            // Ringkasan Omzet Periode
+            // 2. Baris Filter Ringkas & Kolom Pencarian
+            Row(
+              children: [
+                Expanded(
+                  child: AppCard(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: (_) => setState(() {}),
+                      decoration: const InputDecoration(
+                        icon: Icon(Icons.search, size: 20),
+                        hintText: 'Cari transaksi...',
+                        border: InputBorder.none,
+                        isDense: true,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(minWidth: 120, maxWidth: 145),
+                  child: AppFilterPill(
+                    icon: Icons.calendar_month_outlined,
+                    label: _selectedFilter,
+                    isActive: _selectedFilter != _defaultFilter,
+                    onTap: _showFilterSheet,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // 3. Ringkasan Omzet Periode
             AppCard(
               padding: const EdgeInsets.all(16),
               child: Row(
@@ -255,7 +375,9 @@ class _PenjualanTabState extends State<PenjualanTab> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Total Penjualan ($_selectedFilter)',
+                        _selectedFilter == 'Hari Ini'
+                            ? 'Total Hari Ini'
+                            : 'Total Penjualan ($_selectedFilter)',
                         style: theme.textTheme.labelMedium?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
@@ -270,10 +392,18 @@ class _PenjualanTabState extends State<PenjualanTab> {
                       ),
                     ],
                   ),
-                  Text(
-                    '${transactions.length} Transaksi',
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      '${transactions.length} Transaksi',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.primary,
+                      ),
                     ),
                   ),
                 ],
@@ -281,7 +411,7 @@ class _PenjualanTabState extends State<PenjualanTab> {
             ),
             const SizedBox(height: 16),
 
-            // Daftar Transaksi
+            // 4. Daftar Transaksi per Tanggal
             if (_isLoading)
               const Center(
                 child: Padding(
@@ -301,14 +431,65 @@ class _PenjualanTabState extends State<PenjualanTab> {
                   ),
                 ),
               )
-            else
-              ...transactions.map((group) {
-                return RiwayatTransaksiCard(
-                  group: group,
-                  onTap: () => _showDetailTransaction(group),
-                  onDelete: () => _handleDeleteTransaction(group),
-                );
-              }),
+            else ...[
+              Builder(
+                builder: (context) {
+                  final grouped = _groupedTransactions;
+                  final sortedDateKeys = grouped.keys.toList()..sort((a, b) => b.compareTo(a));
+                  final todayIso = TanggalFormatter.keIso(DateTime.now());
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: sortedDateKeys.map((dateKey) {
+                      final groupsOnDate = grouped[dateKey]!;
+                      final isSameAsToday = dateKey == todayIso;
+                      final isFirstGroup = dateKey == sortedDateKeys.first;
+
+                      String dateLabel;
+                      try {
+                        final dt = DateTime.parse(dateKey);
+                        dateLabel = TanggalFormatter.bulanPenuh(dt);
+                      } catch (_) {
+                        dateLabel = dateKey;
+                      }
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8, bottom: 10),
+                            child: isSameAsToday || isFirstGroup
+                                ? Text(
+                                    'DAFTAR TRANSAKSI',
+                                    style: theme.textTheme.titleSmall?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  )
+                                : Text(
+                                    dateLabel,
+                                    style: theme.textTheme.titleSmall?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: theme.colorScheme.primary,
+                                    ),
+                                  ),
+                          ),
+                          ...groupsOnDate.map((group) {
+                            return RiwayatTransaksiCard(
+                              group: group,
+                              isCompact: true,
+                              onTap: () => _showDetailTransaction(group),
+                              onDelete: () => _handleDeleteTransaction(group),
+                            );
+                          }),
+                          const SizedBox(height: 6),
+                        ],
+                      );
+                    }).toList(),
+                  );
+                },
+              ),
+            ],
           ],
         ),
       ),

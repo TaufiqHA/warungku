@@ -130,7 +130,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
                 )
               : const SizedBox.shrink(),
           _visitedTabs.contains(2)
-              ? const PenjualanTab(canAddTransaction: false)
+              ? const PenjualanTab(canAddTransaction: false, initialFilter: 'Minggu Ini')
               : const SizedBox.shrink(),
           _visitedTabs.contains(3)
               ? ProfilTab(

@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:printing/printing.dart';
 import '../../core/auth/app_roles.dart';
 import '../../core/auth/role_guard.dart';
 import '../../data/models/auth_model.dart';
