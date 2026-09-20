@@ -60,10 +60,13 @@ Dokumen ini berfungsi sebagai katalog sentral untuk seluruh elemen dan komponen 
 | `ThermalPrinterService` (Bluetooth) | `lib/services/thermal_printer_service.dart` | Jalur cetak ESC/POS Bluetooth `print_bluetooth_thermal`: cek izin runtime → cek adaptor Bluetooth → `connect` (native plugin otomatis menutup socket lama) → kirim struk, dengan sambung-ulang otomatis bila koneksi basi, status koneksi, connect/disconnect manual, dan kop struk dari Profil Warung | `sendToPrinter()`, `sendToBluetooth()`, `scanPairedDevices()`, `connectPrinter()`, `disconnectPrinter()`, `isBluetoothEnabled()`, `isPrinterConnected()`, `printSalesReceipt()`, `printKitchenReceipt()`, `PairedDevicesResult` | SalesReceiptDialog (Cetak), KitchenReceiptDialog (Cetak Dapur), PrinterSettingsDialog |
 | `AngkaRibuan` | `lib/core/utils/angka_ribuan.dart` | Utilitas angka gaya Indonesia: format ribuan bertitik, baca kembali nominal bertitik ke angka, dan konversi ke digit untuk payload API | `format(num)`, `formatDigits(String)`, `parse(String?)`, `toDigits(String?)` | Form Tambah/Edit Menu (BarangTab), Form Biaya, validator nominal |
 | `RibuanInputFormatter` | `lib/core/utils/angka_ribuan.dart` | `TextInputFormatter` yang menyisipkan titik ribuan otomatis saat user mengetik nominal (hanya digit, nol di depan dibuang, kursor di akhir) | `const RibuanInputFormatter()` | Field 'Harga (Rp)' pada Form Tambah/Edit Menu (dipasang lewat `AppTextField.inputFormatters`) |
+| `FilterCustomTanggalDialog` | `lib/widgets/filter_custom_tanggal_dialog.dart` | Modal dialog filter custom rentang tanggal (Mulai & Selesai) dan pilihan radio jenis data (Semua, Pengeluaran, Pemasukan, Laba Rugi, Menu Terlaris) | `initialStartDate`, `initialEndDate`, `initialDataType`, `show()`, `FilterCustomTanggalResult` | LabaRugiTab (Chip 'Pilih Tanggal') |
 
 ---
 
 ## 3. Log Pembuatan & Perubahan Komponen
+
+- `2026-09-20`: **Modal Dialog Filter Custom Tanggal & Jenis Data** (`lib/widgets/filter_custom_tanggal_dialog.dart`). Mengganti filter chip `Pilih Rentang` menjadi `Pilih Tanggal` pada `LabaRugiTab`. Saat chip ditekan, memunculkan modal dialog minimalis dengan pemilih tanggal mulai, tanggal selesai, serta opsi radio jenis data (*Tampilkan Semua*, *Pengeluaran Saja*, *Pemasukan Saja*, *Laba Rugi Saja*, *Rincian Menu Terlaris*) yang menyaring seksi halaman secara responsif.
 
 - `2026-09-20`: **Penataan Ulang Tata Letak & Urutan Elemen UI Tab Laba Rugi (Owner)** (`lib/screens/dashboard/tabs/laba_rugi_tab.dart`). Tata letak disusun secara presisi mengikuti 9 urutan gambar referensi dengan tetap mempertahankan skema warna minimalis aplikasi Warungku (Material 3 surface, border outlineVariant tipis, tanpa warna norak/neon):
   1. Header halaman: "Laporan Keuangan" & "Analisis Performa Warung".

@@ -7,6 +7,7 @@ import '../../../services/monthly_report_pdf_service.dart';
 import '../../../services/transaction_service.dart';
 import '../../../widgets/app_card.dart';
 import '../../../widgets/detail_transaksi_dialog.dart';
+import '../../../widgets/filter_custom_tanggal_dialog.dart';
 import '../../report/monthly_report_screen.dart';
 
 class LabaRugiTab extends StatefulWidget {
@@ -33,10 +34,11 @@ class _LabaRugiTabState extends State<LabaRugiTab> {
     'Bulan Ini',
     'Bulan Lalu',
     'Semua',
-    'Pilih Rentang',
+    'Pilih Tanggal',
   ];
 
   DateTimeRange? _customDateRange;
+  String _selectedDataType = 'Tampilkan Semua';
 
   double _totalRevenue = 0;
   double _totalExpense = 0;
@@ -54,7 +56,7 @@ class _LabaRugiTabState extends State<LabaRugiTab> {
     setState(() => _isLoading = true);
     try {
       String filterArg = _selectedFilter;
-      if (filterArg == 'Pilih Rentang') {
+      if (filterArg == 'Pilih Tanggal') {
         filterArg = 'Semua';
       }
 
@@ -72,7 +74,7 @@ class _LabaRugiTabState extends State<LabaRugiTab> {
       var trxList = results[0] as List<TransactionModel>;
       var expList = results[1] as List<ExpenseModel>;
 
-      if (_selectedFilter == 'Pilih Rentang' && _customDateRange != null) {
+      if (_selectedFilter == 'Pilih Tanggal' && _customDateRange != null) {
         final start = _customDateRange!.start;
         final end = _customDateRange!.end.add(const Duration(days: 1));
 
@@ -121,31 +123,20 @@ class _LabaRugiTabState extends State<LabaRugiTab> {
     }
   }
 
-  Future<void> _pickCustomDateRange() async {
+  Future<void> _openCustomFilterDialog() async {
     final now = DateTime.now();
-    final picked = await showDateRangePicker(
+    final res = await FilterCustomTanggalDialog.show(
       context: context,
-      firstDate: DateTime(2023),
-      lastDate: DateTime(now.year + 1),
-      initialDateRange: _customDateRange ??
-          DateTimeRange(
-            start: now.subtract(const Duration(days: 7)),
-            end: now,
-          ),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: Theme.of(context).colorScheme,
-          ),
-          child: child!,
-        );
-      },
+      initialStartDate: _customDateRange?.start ?? now.subtract(const Duration(days: 7)),
+      initialEndDate: _customDateRange?.end ?? now,
+      initialDataType: _selectedDataType,
     );
 
-    if (picked != null) {
+    if (res != null) {
       setState(() {
-        _customDateRange = picked;
-        _selectedFilter = 'Pilih Rentang';
+        _customDateRange = DateTimeRange(start: res.startDate, end: res.endDate);
+        _selectedDataType = res.dataType;
+        _selectedFilter = 'Pilih Tanggal';
       });
       _loadData();
     }
@@ -493,12 +484,13 @@ class _LabaRugiTabState extends State<LabaRugiTab> {
                       selected: isSelected,
                       showCheckmark: false,
                       onSelected: (selected) {
-                        if (f == 'Pilih Rentang') {
-                          _pickCustomDateRange();
+                        if (f == 'Pilih Tanggal') {
+                          _openCustomFilterDialog();
                         } else if (selected && _selectedFilter != f) {
                           setState(() {
                             _selectedFilter = f;
                             _customDateRange = null;
+                            _selectedDataType = 'Tampilkan Semua';
                           });
                           _loadData();
                         }
@@ -599,402 +591,415 @@ class _LabaRugiTabState extends State<LabaRugiTab> {
             const SizedBox(height: 20),
 
             // 6. Section Rincian Harian (Akordeon Transaksi Harian)
-            Text(
-              'Rincian Harian',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
+            if (_selectedDataType == 'Tampilkan Semua' ||
+                _selectedDataType == 'Pemasukan Saja' ||
+                _selectedDataType == 'Laba Rugi Saja') ...[
+              Text(
+                'Rincian Harian',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-            if (dailySales.isEmpty)
-              AppCard(
-                padding: const EdgeInsets.symmetric(vertical: 24),
-                child: Center(
-                  child: Text(
-                    'Tidak ada transaksi pada periode ini',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
+              const SizedBox(height: 8),
+              if (dailySales.isEmpty)
+                AppCard(
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  child: Center(
+                    child: Text(
+                      'Tidak ada transaksi pada periode ini',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
                     ),
                   ),
-                ),
-              )
-            else
-              AppCard(
-                padding: EdgeInsets.zero,
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: dailySales.length,
-                  separatorBuilder: (_, _) => Divider(
-                    height: 1,
-                    color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
-                  ),
-                  itemBuilder: (context, index) {
-                    final day = dailySales[index];
-                    final displayDate = day['displayDate'] as String;
-                    final total = day['total'] as double;
-                    final groups = day['groups'] as List<TransactionGroup>;
+                )
+              else
+                AppCard(
+                  padding: EdgeInsets.zero,
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: dailySales.length,
+                    separatorBuilder: (_, _) => Divider(
+                      height: 1,
+                      color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
+                    ),
+                    itemBuilder: (context, index) {
+                      final day = dailySales[index];
+                      final displayDate = day['displayDate'] as String;
+                      final total = day['total'] as double;
+                      final groups = day['groups'] as List<TransactionGroup>;
 
-                    return Theme(
-                      data: theme.copyWith(dividerColor: Colors.transparent),
-                      child: ExpansionTile(
-                        shape: const Border(),
-                        collapsedShape: const Border(),
-                        tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                        title: Text(
-                          displayDate,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.green.shade800,
+                      return Theme(
+                        data: theme.copyWith(dividerColor: Colors.transparent),
+                        child: ExpansionTile(
+                          shape: const Border(),
+                          collapsedShape: const Border(),
+                          tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                          title: Text(
+                            displayDate,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.green.shade800,
+                            ),
                           ),
-                        ),
-                        trailing: Text(
-                          _formatRupiah(total),
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.green.shade800,
+                          trailing: Text(
+                            _formatRupiah(total),
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.green.shade800,
+                            ),
                           ),
-                        ),
-                        children: groups.map((g) {
-                          return Padding(
-                            padding: const EdgeInsets.only(top: 8),
-                            child: InkWell(
-                              onTap: () => DetailTransaksiDialog.show(
-                                context: context,
-                                group: g,
-                              ),
-                              borderRadius: BorderRadius.circular(8),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 10,
+                          children: groups.map((g) {
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: InkWell(
+                                onTap: () => DetailTransaksiDialog.show(
+                                  context: context,
+                                  group: g,
                                 ),
-                                decoration: BoxDecoration(
-                                  color: theme.colorScheme.surfaceContainerLowest,
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                    color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
+                                borderRadius: BorderRadius.circular(8),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 10,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: theme.colorScheme.surfaceContainerLowest,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: BoxDecoration(
+                                          color: theme.colorScheme.primaryContainer.withValues(alpha: 0.4),
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Icon(
+                                          Icons.receipt_outlined,
+                                          size: 18,
+                                          color: theme.colorScheme.primary,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              g.idTransaksi,
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 13,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              '${_formatJam(g.waktu)} • ${g.totalQuantity} item',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: theme.colorScheme.onSurfaceVariant,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      Text(
+                                        _formatRupiah(g.totalHarga),
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13,
+                                          color: Colors.green.shade700,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                                child: Row(
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              const SizedBox(height: 20),
+            ],
+
+            // 7. Section Rincian Pengeluaran
+            if (_selectedDataType == 'Tampilkan Semua' ||
+                _selectedDataType == 'Pengeluaran Saja') ...[
+              Text(
+                'Rincian Pengeluaran',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              if (expensesByDate.isEmpty)
+                AppCard(
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  child: Center(
+                    child: Text(
+                      'Tidak ada pengeluaran pada periode ini',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                )
+              else
+                AppCard(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: expensesByDate.length,
+                    separatorBuilder: (_, _) => Divider(
+                      height: 1,
+                      color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
+                    ),
+                    itemBuilder: (context, index) {
+                      final group = expensesByDate[index];
+                      final displayDate = group['displayDate'] as String;
+                      final count = group['count'] as int;
+                      final total = group['total'] as double;
+
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              displayDate,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '$count pengeluaran • - ${_formatRupiah(total)}',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.error,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              const SizedBox(height: 20),
+            ],
+
+            // 8. Section Daftar Transaksi Per Struk
+            if (_selectedDataType == 'Tampilkan Semua' ||
+                _selectedDataType == 'Pemasukan Saja') ...[
+              Row(
+                children: [
+                  const Icon(Icons.receipt_long_rounded, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Daftar Transaksi Per Struk ($_selectedFilter)',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              if (transactionGroups.isEmpty)
+                AppCard(
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  child: Center(
+                    child: Text(
+                      'Tidak ada transaksi pada periode ini',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                )
+              else
+                AppCard(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: transactionGroups.length,
+                    separatorBuilder: (_, _) => Divider(
+                      height: 1,
+                      color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
+                    ),
+                    itemBuilder: (context, index) {
+                      final g = transactionGroups[index];
+                      final paymentText = g.paymentMethod.isNotEmpty
+                          ? g.paymentMethod.toUpperCase()
+                          : 'CASH';
+
+                      return InkWell(
+                        onTap: () => DetailTransaksiDialog.show(
+                          context: context,
+                          group: g,
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Container(
-                                      padding: const EdgeInsets.all(8),
-                                      decoration: BoxDecoration(
-                                        color: theme.colorScheme.primaryContainer.withValues(alpha: 0.4),
-                                        borderRadius: BorderRadius.circular(6),
-                                      ),
-                                      child: Icon(
-                                        Icons.receipt_outlined,
-                                        size: 18,
-                                        color: theme.colorScheme.primary,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            g.idTransaksi,
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 13,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            '${_formatJam(g.waktu)} • ${g.totalQuantity} item',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: theme.colorScheme.onSurfaceVariant,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
                                     Text(
-                                      _formatRupiah(g.totalHarga),
-                                      style: TextStyle(
+                                      g.idTransaksi,
+                                      style: const TextStyle(
                                         fontWeight: FontWeight.bold,
                                         fontSize: 13,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Berhasil • $paymentText',
+                                      style: TextStyle(
+                                        fontSize: 12,
                                         color: Colors.green.shade700,
+                                        fontWeight: FontWeight.w600,
                                       ),
                                     ),
                                   ],
                                 ),
                               ),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            const SizedBox(height: 20),
-
-            // 7. Section Rincian Pengeluaran
-            Text(
-              'Rincian Pengeluaran',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-            if (expensesByDate.isEmpty)
-              AppCard(
-                padding: const EdgeInsets.symmetric(vertical: 24),
-                child: Center(
-                  child: Text(
-                    'Tidak ada pengeluaran pada periode ini',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-              )
-            else
-              AppCard(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: expensesByDate.length,
-                  separatorBuilder: (_, _) => Divider(
-                    height: 1,
-                    color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
-                  ),
-                  itemBuilder: (context, index) {
-                    final group = expensesByDate[index];
-                    final displayDate = group['displayDate'] as String;
-                    final count = group['count'] as int;
-                    final total = group['total'] as double;
-
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            displayDate,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '$count pengeluaran • - ${_formatRupiah(total)}',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.error,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-              ),
-            const SizedBox(height: 20),
-
-            // 8. Section Daftar Transaksi Per Struk
-            Row(
-              children: [
-                const Icon(Icons.receipt_long_rounded, size: 20),
-                const SizedBox(width: 8),
-                Text(
-                  'Daftar Transaksi Per Struk ($_selectedFilter)',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            if (transactionGroups.isEmpty)
-              AppCard(
-                padding: const EdgeInsets.symmetric(vertical: 24),
-                child: Center(
-                  child: Text(
-                    'Tidak ada transaksi pada periode ini',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-              )
-            else
-              AppCard(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: transactionGroups.length,
-                  separatorBuilder: (_, _) => Divider(
-                    height: 1,
-                    color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
-                  ),
-                  itemBuilder: (context, index) {
-                    final g = transactionGroups[index];
-                    final paymentText = g.paymentMethod.isNotEmpty
-                        ? g.paymentMethod.toUpperCase()
-                        : 'CASH';
-
-                    return InkWell(
-                      onTap: () => DetailTransaksiDialog.show(
-                        context: context,
-                        group: g,
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    g.idTransaksi,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'Berhasil • $paymentText',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.green.shade700,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Text(
-                              _formatRupiah(g.totalHarga),
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
-                                color: Colors.green.shade700,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            const SizedBox(height: 20),
-
-            // 9. Section Menu Terlaris
-            Row(
-              children: [
-                const Icon(Icons.emoji_events_outlined, size: 20),
-                const SizedBox(width: 8),
-                Text(
-                  'Menu Terlaris ($_selectedFilter)',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            if (topSelling.isEmpty)
-              AppCard(
-                padding: const EdgeInsets.symmetric(vertical: 24),
-                child: Center(
-                  child: Text(
-                    'Tidak ada data penjualan menu',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-              )
-            else
-              AppCard(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: topSelling.length,
-                  separatorBuilder: (_, _) => Divider(
-                    height: 1,
-                    color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
-                  ),
-                  itemBuilder: (context, index) {
-                    final item = topSelling[index];
-                    final name = item['name'] as String;
-                    final qty = item['qty'] as int;
-                    final omzet = item['omzet'] as double;
-
-                    Color rankColor;
-                    if (index == 0) {
-                      rankColor = const Color(0xFFD97706); // Emas hangat
-                    } else if (index == 1) {
-                      rankColor = const Color(0xFF64748B); // Perak
-                    } else if (index == 2) {
-                      rankColor = const Color(0xFFB45309); // Perunggu
-                    } else {
-                      rankColor = theme.colorScheme.onSurfaceVariant;
-                    }
-
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
                               Text(
-                                '#${index + 1} ',
+                                _formatRupiah(g.totalHarga),
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
-                                  fontSize: 14,
-                                  color: rankColor,
-                                ),
-                              ),
-                              Expanded(
-                                child: Text(
-                                  name,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 14,
-                                  ),
+                                  fontSize: 13,
+                                  color: Colors.green.shade700,
                                 ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '$qty porsi terjual • ${_formatRupiah(omzet)}',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
+                        ),
+                      );
+                    },
+                  ),
                 ),
+              const SizedBox(height: 20),
+            ],
+
+            // 9. Section Menu Terlaris
+            if (_selectedDataType == 'Tampilkan Semua' ||
+                _selectedDataType == 'Rincian Menu Terlaris') ...[
+              Row(
+                children: [
+                  const Icon(Icons.emoji_events_outlined, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Menu Terlaris ($_selectedFilter)',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
               ),
-            const SizedBox(height: 24),
+              const SizedBox(height: 8),
+              if (topSelling.isEmpty)
+                AppCard(
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  child: Center(
+                    child: Text(
+                      'Tidak ada data penjualan menu',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                )
+              else
+                AppCard(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: topSelling.length,
+                    separatorBuilder: (_, _) => Divider(
+                      height: 1,
+                      color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
+                    ),
+                    itemBuilder: (context, index) {
+                      final item = topSelling[index];
+                      final name = item['name'] as String;
+                      final qty = item['qty'] as int;
+                      final omzet = item['omzet'] as double;
+
+                      Color rankColor;
+                      if (index == 0) {
+                        rankColor = const Color(0xFFD97706); // Emas hangat
+                      } else if (index == 1) {
+                        rankColor = const Color(0xFF64748B); // Perak
+                      } else if (index == 2) {
+                        rankColor = const Color(0xFFB45309); // Perunggu
+                      } else {
+                        rankColor = theme.colorScheme.onSurfaceVariant;
+                      }
+
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Text(
+                                  '#${index + 1} ',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                    color: rankColor,
+                                  ),
+                                ),
+                                Expanded(
+                                  child: Text(
+                                    name,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '$qty porsi terjual • ${_formatRupiah(omzet)}',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              const SizedBox(height: 24),
+            ],
           ],
         ),
       ),

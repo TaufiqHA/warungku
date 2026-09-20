@@ -120,7 +120,7 @@ void main() {
     expect(find.text('Kemarin'), findsOneWidget);
     expect(find.text('Minggu Ini'), findsOneWidget);
     expect(find.text('Bulan Ini'), findsWidgets);
-    expect(find.text('Pilih Rentang'), findsOneWidget);
+    expect(find.text('Pilih Tanggal'), findsOneWidget);
 
     // Verifikasi kartu neraca
     expect(find.textContaining('Laba Bersih'), findsOneWidget);

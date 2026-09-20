@@ -20,6 +20,7 @@ import 'package:warungku/widgets/app_autocomplete_field.dart';
 import 'package:warungku/widgets/orderan_aktif_card.dart';
 import 'package:warungku/widgets/tambah_item_pesanan_dialog.dart';
 import 'package:warungku/widgets/detail_transaksi_dialog.dart';
+import 'package:warungku/widgets/filter_custom_tanggal_dialog.dart';
 import 'package:warungku/widgets/sales_receipt_dialog.dart';
 import 'package:warungku/data/models/cart_item_model.dart';
 import 'package:warungku/data/models/transaction_group_model.dart';
@@ -1290,6 +1291,7 @@ void main() {
     // 4. ChoiceChips Filter Periode
     expect(find.text('Hari Ini'), findsOneWidget);
     expect(find.text('Bulan Ini'), findsWidgets);
+    expect(find.text('Pilih Tanggal'), findsOneWidget);
 
     // 5. Card Rekap Performa
     expect(find.text('Total Penjualan'), findsOneWidget);
@@ -1307,6 +1309,77 @@ void main() {
 
     // 9. Section Menu Terlaris
     expect(find.textContaining('Menu Terlaris'), findsOneWidget);
+
+    // Tap chip Pilih Tanggal -> memunculkan modal dialog Filter Custom Tanggal & Jenis Data
+    await tester.ensureVisible(find.text('Pilih Tanggal'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Pilih Tanggal'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Filter Custom Tanggal & Jenis Data'), findsOneWidget);
+    expect(find.text('Tanggal Mulai *'), findsOneWidget);
+    expect(find.text('Tanggal Selesai *'), findsOneWidget);
+    expect(find.text('Jenis Data'), findsOneWidget);
+    expect(find.text('Tampilkan Semua'), findsOneWidget);
+    expect(find.text('Pengeluaran Saja'), findsOneWidget);
+    expect(find.text('Pemasukan Saja'), findsOneWidget);
+    expect(find.text('Laba Rugi Saja'), findsOneWidget);
+    expect(find.text('Rincian Menu Terlaris'), findsOneWidget);
+    expect(find.text('Batal'), findsOneWidget);
+    expect(find.text('Terapkan'), findsOneWidget);
+
+    // Tap Batal menutup dialog
+    await tester.tap(find.text('Batal'));
+    await tester.pumpAndSettle();
+    expect(find.text('Filter Custom Tanggal & Jenis Data'), findsNothing);
+  });
+
+  testWidgets('FilterCustomTanggalDialog mengembalikan hasil tanggal dan jenis data terpilih saat Terapkan ditekan', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+
+    FilterCustomTanggalResult? result;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => ElevatedButton(
+              onPressed: () async {
+                result = await FilterCustomTanggalDialog.show(
+                  context: context,
+                  initialStartDate: DateTime(2026, 9, 1),
+                  initialEndDate: DateTime(2026, 9, 19),
+                  initialDataType: 'Tampilkan Semua',
+                );
+              },
+              child: const Text('Buka Filter'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Buka Filter'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Filter Custom Tanggal & Jenis Data'), findsOneWidget);
+    expect(find.text('1 September 2026'), findsOneWidget);
+    expect(find.text('19 September 2026'), findsOneWidget);
+
+    // Pilih opsi radio Pengeluaran Saja
+    await tester.tap(find.text('Pengeluaran Saja'));
+    await tester.pumpAndSettle();
+
+    // Tekan Terapkan
+    await tester.tap(find.text('Terapkan'));
+    await tester.pumpAndSettle();
+
+    expect(result, isNotNull);
+    expect(result!.dataType, 'Pengeluaran Saja');
+    expect(result!.startDate, DateTime(2026, 9, 1));
+    expect(result!.endDate, DateTime(2026, 9, 19));
   });
 }
 
