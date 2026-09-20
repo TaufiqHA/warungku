@@ -99,7 +99,7 @@ class _LabaRugiTabState extends State<LabaRugiTab> {
 
       double rev = 0;
       for (final t in trxList) {
-        if (t.orderStatus.toUpperCase() != 'CANCELLED') {
+        if (t.isCompleted) {
           rev += t.totalHarga;
         }
       }
@@ -186,7 +186,7 @@ class _LabaRugiTabState extends State<LabaRugiTab> {
   // Pengelompokan seluruh transaksi berstatus valid ke TransactionGroup (Struk)
   List<TransactionGroup> get _transactionGroups {
     final valid = _transactions
-        .where((t) => t.orderStatus.toUpperCase() != 'CANCELLED')
+        .where((t) => t.isCompleted)
         .toList();
     final groups = TransactionGroup.fromTransactionList(valid);
     groups.sort((a, b) {
@@ -280,7 +280,7 @@ class _LabaRugiTabState extends State<LabaRugiTab> {
   List<Map<String, dynamic>> get _topSellingMenu {
     final Map<String, Map<String, dynamic>> map = {};
     for (final t in _transactions) {
-      if (t.orderStatus.toUpperCase() == 'CANCELLED') continue;
+      if (!t.isCompleted) continue;
       final name = t.namaItem.trim();
       if (name.isEmpty) continue;
 

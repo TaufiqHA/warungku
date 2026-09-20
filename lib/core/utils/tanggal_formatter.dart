@@ -95,4 +95,14 @@ class TanggalFormatter {
 
     return DateTime(year, month, day);
   }
+
+  /// Mengecek apakah tanggal dari server sama dengan tanggal hari ini pada zona waktu lokal.
+  static bool isToday(String? value) {
+    if (value == null || value.trim().isEmpty) return false;
+    final dt = parse(value);
+    if (dt == null) return false;
+    final localDt = dt.isUtc ? dt.toLocal() : dt;
+    final now = DateTime.now();
+    return localDt.year == now.year && localDt.month == now.month && localDt.day == now.day;
+  }
 }

@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:warungku/core/utils/tanggal_formatter.dart';
 import 'package:warungku/data/models/auth_model.dart';
 import 'package:warungku/main.dart';
 import 'package:warungku/screens/dashboard/admin_kantor_dashboard_screen.dart';
@@ -1380,6 +1381,239 @@ void main() {
     expect(result!.dataType, 'Pengeluaran Saja');
     expect(result!.startDate, DateTime(2026, 9, 1));
     expect(result!.endDate, DateTime(2026, 9, 19));
+  });
+
+  test('TransactionModel status helper dan parsing key status mengenali berbagai alias status', () {
+    final t1 = TransactionModel.fromJson({'status': 'COMPLETED'});
+    expect(t1.isCompleted, isTrue);
+    expect(t1.isPending, isFalse);
+    expect(t1.isCancelled, isFalse);
+
+    final t2 = TransactionModel.fromJson({'order_status': 'SELESAI'});
+    expect(t2.isCompleted, isTrue);
+
+    final t3 = TransactionModel.fromJson({'orderStatus': 'PENDING'});
+    expect(t3.isPending, isTrue);
+    expect(t3.isCompleted, isFalse);
+
+    final t4 = TransactionModel.fromJson({'status': 'PROSES'});
+    expect(t4.isPending, isTrue);
+    expect(t4.isCompleted, isFalse);
+
+    final t5 = TransactionModel.fromJson({'status': 'CANCELLED'});
+    expect(t5.isCancelled, isTrue);
+    expect(t5.isCompleted, isFalse);
+
+    final t6 = TransactionModel.fromJson({'order_status': 'BATAL'});
+    expect(t6.isCancelled, isTrue);
+    expect(t6.isCompleted, isFalse);
+
+    final t7 = TransactionModel.fromJson({'status': 'READY'});
+    expect(t7.isPending, isTrue);
+    expect(t7.isCompleted, isFalse);
+
+    final t8 = TransactionModel.fromJson({'order_status': 'SIAP'});
+    expect(t8.isPending, isTrue);
+    expect(t8.isCompleted, isFalse);
+  });
+
+  test('Perhitungan omzet dan jumlah transaksi bill konsisten untuk multi-item dan status pesanan', () {
+    final rawList = [
+      // Transaksi 1: COMPLETED, 2 item (Total Rp 30.000)
+      const TransactionModel(
+        idTransaksi: 'TRX-01',
+        id: '1',
+        namaItem: 'Nasi Ayam',
+        jumlah: 1,
+        harga: 20000,
+        waktu: '2026-09-20T10:00:00Z',
+        dicatatOleh: 'Admin Toko',
+        catatan: '',
+        paymentMethod: 'CASH',
+        orderStatus: 'COMPLETED',
+        customerName: 'Budi',
+      ),
+      const TransactionModel(
+        idTransaksi: 'TRX-01',
+        id: '2',
+        namaItem: 'Es Teh',
+        jumlah: 1,
+        harga: 10000,
+        waktu: '2026-09-20T10:00:00Z',
+        dicatatOleh: 'Admin Toko',
+        catatan: '',
+        paymentMethod: 'CASH',
+        orderStatus: 'COMPLETED',
+        customerName: 'Budi',
+      ),
+      // Transaksi 2: SELESAI, 1 item (Total Rp 25.000)
+      const TransactionModel(
+        idTransaksi: 'TRX-02',
+        id: '3',
+        namaItem: 'Bebek Goreng',
+        jumlah: 1,
+        harga: 25000,
+        waktu: '2026-09-20T11:00:00Z',
+        dicatatOleh: 'Admin Toko',
+        catatan: '',
+        paymentMethod: 'QRIS',
+        orderStatus: 'SELESAI',
+        customerName: 'Siti',
+      ),
+      // Transaksi 3: PENDING / PROSES (Active Order, belum selesai)
+      const TransactionModel(
+        idTransaksi: 'TRX-03',
+        id: '4',
+        namaItem: 'Kopi Susu',
+        jumlah: 2,
+        harga: 15000,
+        waktu: '2026-09-20T11:30:00Z',
+        dicatatOleh: 'Admin Toko',
+        catatan: '',
+        paymentMethod: 'CASH',
+        orderStatus: 'PENDING',
+        customerName: 'Ahmad',
+      ),
+      // Transaksi 4: CANCELLED (Dibatalkan)
+      const TransactionModel(
+        idTransaksi: 'TRX-04',
+        id: '5',
+        namaItem: 'Mie Goreng',
+        jumlah: 1,
+        harga: 18000,
+        waktu: '2026-09-20T12:00:00Z',
+        dicatatOleh: 'Admin Toko',
+        catatan: '',
+        paymentMethod: 'CASH',
+        orderStatus: 'CANCELLED',
+        customerName: 'Rian',
+      ),
+      // Transaksi 5: READY (Siap saji/antrean aktif, belum selesai)
+      const TransactionModel(
+        idTransaksi: 'TRX-05',
+        id: '6',
+        namaItem: 'Soto Ayam',
+        jumlah: 1,
+        harga: 22000,
+        waktu: '2026-09-20T12:15:00Z',
+        dicatatOleh: 'Admin Toko',
+        catatan: '',
+        paymentMethod: 'CASH',
+        orderStatus: 'READY',
+        customerName: 'Dewi',
+      ),
+    ];
+
+    // 1. Filter transaksi non-pending (seperti di PenjualanTab dan BerandaTab)
+    final nonPending = rawList.where((t) => !t.isPending).toList();
+    final groups = TransactionGroup.fromTransactionList(nonPending);
+
+    // 2. Transaksi selesai (isCompleted)
+    final completedGroups = groups.where((g) => g.isCompleted).toList();
+
+    // Pastikan hanya TRX-01 dan TRX-02 yang terhitung selesai (bukan pending TRX-03 dan bukan cancelled TRX-04)
+    expect(completedGroups.length, 2);
+    expect(completedGroups.map((g) => g.idTransaksi), containsAll(['TRX-01', 'TRX-02']));
+
+    // Total omzet bill selesai: Rp 30.000 (TRX-01) + Rp 25.000 (TRX-02) = Rp 55.000
+    final totalOmzet = completedGroups.fold(0.0, (acc, g) => acc + g.totalHarga);
+    expect(totalOmzet, 55000.0);
+  });
+
+  test('TanggalFormatter.isToday dan filter transaksi hari ini mengabaikan transaksi kemarin dan menghitung per bill', () {
+    final now = DateTime.now();
+    final yesterday = now.subtract(const Duration(days: 1));
+
+    expect(TanggalFormatter.isToday(now.toIso8601String()), isTrue);
+    expect(TanggalFormatter.isToday(yesterday.toIso8601String()), isFalse);
+
+    final rawList = [
+      // Pembelian 1 Hari Ini: 3 menu item (Bill TRX-TODAY-01)
+      TransactionModel(
+        idTransaksi: 'TRX-TODAY-01',
+        id: '1',
+        namaItem: 'Ayam Penyet',
+        jumlah: 1,
+        harga: 25000,
+        waktu: now.toIso8601String(),
+        dicatatOleh: 'Admin Toko',
+        catatan: '',
+        paymentMethod: 'CASH',
+        orderStatus: 'COMPLETED',
+        customerName: 'Meja 1',
+      ),
+      TransactionModel(
+        idTransaksi: 'TRX-TODAY-01',
+        id: '2',
+        namaItem: 'Es Jeruk',
+        jumlah: 1,
+        harga: 7000,
+        waktu: now.toIso8601String(),
+        dicatatOleh: 'Admin Toko',
+        catatan: '',
+        paymentMethod: 'CASH',
+        orderStatus: 'COMPLETED',
+        customerName: 'Meja 1',
+      ),
+      TransactionModel(
+        idTransaksi: 'TRX-TODAY-01',
+        id: '3',
+        namaItem: 'Kerupuk',
+        jumlah: 2,
+        harga: 2000,
+        waktu: now.toIso8601String(),
+        dicatatOleh: 'Admin Toko',
+        catatan: '',
+        paymentMethod: 'CASH',
+        orderStatus: 'COMPLETED',
+        customerName: 'Meja 1',
+      ),
+      // Pembelian 2 Hari Ini: 1 menu item (Bill TRX-TODAY-02)
+      TransactionModel(
+        idTransaksi: 'TRX-TODAY-02',
+        id: '4',
+        namaItem: 'Nasi Goreng Spesial',
+        jumlah: 1,
+        harga: 28000,
+        waktu: now.toIso8601String(),
+        dicatatOleh: 'Admin Toko',
+        catatan: '',
+        paymentMethod: 'QRIS',
+        orderStatus: 'COMPLETED',
+        customerName: 'Meja 2',
+      ),
+      // Pembelian Kemarin: COMPLETED (Bill TRX-YESTERDAY)
+      TransactionModel(
+        idTransaksi: 'TRX-YESTERDAY',
+        id: '5',
+        namaItem: 'Bebek Bakar',
+        jumlah: 1,
+        harga: 35000,
+        waktu: yesterday.toIso8601String(),
+        dicatatOleh: 'Admin Toko',
+        catatan: '',
+        paymentMethod: 'CASH',
+        orderStatus: 'COMPLETED',
+        customerName: 'Kemarin',
+      ),
+    ];
+
+    // Filter ketat hanya transaksi hari ini
+    final todayOnly = rawList.where((t) => TanggalFormatter.isToday(t.waktu)).toList();
+    expect(todayOnly.length, 4); // 4 baris item hari ini (TRX-YESTERDAY diabaikan)
+
+    // Dikelompokkan per bill transaksi (per pembelian)
+    final nonPending = todayOnly.where((t) => !t.isPending).toList();
+    final todayGroups = TransactionGroup.fromTransactionList(nonPending);
+    final completedGroups = todayGroups.where((g) => g.isCompleted).toList();
+
+    // Jumlah transaksi adalah 2 bill pembelian yang dibuat hari ini, BUKAN 4 menu yang dipesan
+    expect(completedGroups.length, 2);
+    expect(completedGroups.map((g) => g.idTransaksi), containsAll(['TRX-TODAY-01', 'TRX-TODAY-02']));
+
+    // Total omzet hari ini: (25.000 + 7.000 + 4.000) + 28.000 = 64.000 (tidak termasuk 35.000 kemarin)
+    final totalTodayOmzet = completedGroups.fold(0.0, (sum, g) => sum + g.totalHarga);
+    expect(totalTodayOmzet, 64000.0);
   });
 }
 

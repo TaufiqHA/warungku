@@ -58,8 +58,12 @@ class _PenjualanTabState extends State<PenjualanTab> {
       );
       if (mounted) {
         setState(() {
+          var filteredList = list;
+          if (_selectedFilter == 'Hari Ini') {
+            filteredList = list.where((t) => TanggalFormatter.isToday(t.waktu)).toList();
+          }
           // Hanya menampilkan transaksi yang sudah selesai atau dibatalkan (bukan transaksi berjalan / PENDING)
-          final nonPending = list.where((t) => t.orderStatus.toUpperCase() != 'PENDING').toList();
+          final nonPending = filteredList.where((t) => !t.isPending).toList();
           _transactionGroups = TransactionGroup.fromTransactionList(nonPending);
           _isLoading = false;
         });
@@ -107,7 +111,7 @@ class _PenjualanTabState extends State<PenjualanTab> {
 
   double get _totalFilteredOmzet {
     return _filteredTransactions
-        .where((g) => g.orderStatus.toUpperCase() != 'CANCELLED')
+        .where((g) => g.isCompleted)
         .fold(0.0, (sum, g) => sum + g.totalHarga);
   }
 

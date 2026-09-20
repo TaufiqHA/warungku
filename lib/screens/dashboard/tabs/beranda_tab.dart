@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import '../../../core/utils/tanggal_formatter.dart';
 import '../../../data/models/auth_model.dart';
 import '../../../data/models/product_model.dart';
+import '../../../data/models/transaction_group_model.dart';
 import '../../../data/models/transaction_model.dart';
 import '../../../services/product_service.dart';
 import '../../../services/token_manager.dart';
@@ -59,7 +61,7 @@ class _BerandaTabState extends State<BerandaTab> {
     setState(() => _isLoading = true);
     try {
       final user = await TokenManager.getUser();
-      final transactions = await _transactionService.getTransactions(
+      final rawTransactions = await _transactionService.getTransactions(
         filter: 'Hari Ini',
         forceRefresh: forceRefresh,
       ).catchError((_) => <TransactionModel>[]);
@@ -67,9 +69,12 @@ class _BerandaTabState extends State<BerandaTab> {
         forceRefresh: forceRefresh,
       ).catchError((_) => <ProductModel>[]);
 
+      // Pastikan hanya memproses transaksi hari ini (waktu lokal)
+      final transactions = rawTransactions.where((t) => TanggalFormatter.isToday(t.waktu)).toList();
+
       // Pisahkan transaksi PENDING (Orderan Aktif) dan yang sudah selesai/dibatalkan
-      final pendingTransactions = transactions.where((t) => t.orderStatus.toUpperCase() == 'PENDING').toList();
-      final completedTransactions = transactions.where((t) => t.orderStatus.toUpperCase() != 'PENDING').toList();
+      final pendingTransactions = transactions.where((t) => t.isPending).toList();
+      final nonPendingTransactions = transactions.where((t) => !t.isPending).toList();
 
       // Kelompokkan Orderan Aktif per idTransaksi
       final Map<String, List<TransactionModel>> grouped = {};
@@ -87,15 +92,14 @@ class _BerandaTabState extends State<BerandaTab> {
         );
       }).toList();
 
-      // Hitung omzet hari ini hanya dari transaksi COMPLETED
-      double sum = 0;
-      int completedCount = 0;
-      for (final t in completedTransactions) {
-        if (t.orderStatus.toUpperCase() == 'COMPLETED') {
-          sum += t.totalHarga;
-          completedCount++;
-        }
-      }
+      // Kelompokkan transaksi selesai per idTransaksi (bill riil)
+      final completedGroups = TransactionGroup.fromTransactionList(nonPendingTransactions)
+          .where((g) => g.isCompleted)
+          .toList();
+
+      // Hitung omzet hari ini hanya dari transaksi yang telah selesai (bukan dibatalkan/pending)
+      final double sum = completedGroups.fold(0.0, (acc, g) => acc + g.totalHarga);
+      final int completedCount = completedGroups.length;
 
       if (mounted) {
         setState(() {
@@ -238,7 +242,7 @@ class _BerandaTabState extends State<BerandaTab> {
           paymentMethod: paymentMethod,
           discountAmount: discountAmount,
         );
-        _loadData();
+        _loadData(forceRefresh: true);
 
         if (mounted) {
           await SalesReceiptDialog.showFromOrderGroup(
@@ -535,7 +539,7 @@ class _BerandaTabState extends State<BerandaTab> {
                 color: theme.colorScheme.onSurfaceVariant,
                 visualDensity: VisualDensity.compact,
                 tooltip: 'Refresh',
-                onPressed: _loadData,
+                onPressed: () => _loadData(forceRefresh: true),
               ),
             ],
           ),

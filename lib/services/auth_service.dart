@@ -5,7 +5,11 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/constants/api_constants.dart';
 import '../data/models/auth_model.dart';
+import 'expense_service.dart';
+import 'product_service.dart';
 import 'token_manager.dart';
+import 'transaction_service.dart';
+import 'user_service.dart';
 
 class AuthService {
   final http.Client _client;
@@ -75,6 +79,10 @@ class AuthService {
     } catch (_) {
       // Abaikan kegagalan jaringan saat logout agar sesi tetap dibersihkan
     } finally {
+      TransactionService.clearCache();
+      ProductService.clearCache();
+      ExpenseService.clearCache();
+      UserService.clearCache();
       await TokenManager.clearSession();
     }
   }

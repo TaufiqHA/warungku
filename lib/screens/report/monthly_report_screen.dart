@@ -56,7 +56,7 @@ class _MonthlyReportScreenState extends State<MonthlyReportScreen> {
       ).catchError((_) => <TransactionModel>[]);
       
       final filtered = all.where((t) {
-        if (t.orderStatus.toUpperCase() == 'CANCELLED') return false;
+        if (!t.isCompleted) return false;
         try {
           final dt = DateTime.parse(t.waktu);
           return dt.month == _selectedMonth && dt.year == _selectedYear;

@@ -52,6 +52,11 @@ class AppBadge extends StatelessWidget {
         bg = const Color(0xFFDCFCE7);
         fg = const Color(0xFF15803D);
         break;
+      case 'READY':
+      case 'SIAP':
+        bg = const Color(0xFFE0F2FE);
+        fg = const Color(0xFF0369A1);
+        break;
       case 'PENDING':
       case 'PROSES':
         bg = const Color(0xFFFEF3C7);

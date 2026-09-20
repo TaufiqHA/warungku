@@ -25,6 +25,21 @@ class TransactionGroup {
   int get totalQuantity => items.fold(0, (sum, item) => sum + item.jumlah);
   bool get isMultiItem => items.length > 1;
 
+  bool get isPending {
+    final s = orderStatus.trim().toUpperCase();
+    return s == 'PENDING' || s == 'PROSES' || s == 'READY' || s == 'SIAP';
+  }
+
+  bool get isCancelled {
+    final s = orderStatus.trim().toUpperCase();
+    return s == 'CANCELLED' || s == 'BATAL';
+  }
+
+  bool get isCompleted {
+    final s = orderStatus.trim().toUpperCase();
+    return s == 'COMPLETED' || s == 'SELESAI';
+  }
+
   factory TransactionGroup.fromSingleTransaction(TransactionModel trx) {
     return TransactionGroup(
       idTransaksi: trx.idTransaksi,

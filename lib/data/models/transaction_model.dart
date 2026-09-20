@@ -29,6 +29,21 @@ class TransactionModel {
 
   double get totalHarga => harga * jumlah;
 
+  bool get isPending {
+    final s = orderStatus.trim().toUpperCase();
+    return s == 'PENDING' || s == 'PROSES' || s == 'READY' || s == 'SIAP';
+  }
+
+  bool get isCancelled {
+    final s = orderStatus.trim().toUpperCase();
+    return s == 'CANCELLED' || s == 'BATAL';
+  }
+
+  bool get isCompleted {
+    final s = orderStatus.trim().toUpperCase();
+    return s == 'COMPLETED' || s == 'SELESAI';
+  }
+
   factory TransactionModel.fromJson(Map<String, dynamic> json) {
     return TransactionModel(
       idTransaksi: json['idTransaksi']?.toString() ?? json['id']?.toString() ?? '',
@@ -40,7 +55,10 @@ class TransactionModel {
       dicatatOleh: json['dicatatOleh'] as String? ?? json['dicatat_oleh'] as String? ?? 'Admin',
       catatan: json['catatan'] as String? ?? '',
       paymentMethod: json['payment_method'] as String? ?? json['paymentMethod'] as String? ?? 'Tunai',
-      orderStatus: json['orderStatus'] as String? ?? json['order_status'] as String? ?? 'COMPLETED',
+      orderStatus: json['orderStatus'] as String? ??
+          json['order_status'] as String? ??
+          json['status'] as String? ??
+          'COMPLETED',
       customerName: json['customer_name'] as String? ?? json['customerName'] as String? ?? '-',
       servedQty: (json['servedQty'] as num?)?.toInt() ?? 0,
     );
