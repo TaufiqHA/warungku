@@ -98,6 +98,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
         children: [
           _visitedTabs.contains(0)
               ? BerandaTab(
+                  isActive: _currentIndex == 0,
                   onGoToLabaRugi: () => _switchTab(1),
                   onGoToPenjualan: () => _switchTab(2),
                   onGoToProfil: () => _switchTab(3),

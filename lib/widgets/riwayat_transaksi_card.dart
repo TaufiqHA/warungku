@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/utils/tanggal_formatter.dart';
 import '../data/models/transaction_group_model.dart';
 import '../data/models/transaction_model.dart';
 import 'app_badge.dart';
@@ -22,21 +23,11 @@ class RiwayatTransaksiCard extends StatelessWidget {
 
   TransactionGroup get _effectiveGroup => group ?? TransactionGroup.fromSingleTransaction(trx!);
 
-  static const List<String> _bulanSingkat = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
-    'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des',
-  ];
-
+  /// Waktu transaksi dalam zona waktu perangkat (`21 Sep 2026, 12:16`).
+  /// Nilai mentah dipakai kembali bila format waktu tidak dikenali.
   String _formatWaktuSingkat(String raw) {
-    try {
-      final dt = DateTime.parse(raw);
-      final hour = dt.hour.toString().padLeft(2, '0');
-      final minute = dt.minute.toString().padLeft(2, '0');
-      final bulan = _bulanSingkat[dt.month - 1];
-      return '${dt.day} $bulan ${dt.year}, $hour:$minute';
-    } catch (_) {
-      return raw;
-    }
+    final lokal = TanggalFormatter.tanggalJam(raw);
+    return lokal.isNotEmpty ? lokal : raw;
   }
 
   String _formatRupiah(double amount) {

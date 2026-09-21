@@ -16,6 +16,7 @@ import 'package:warungku/screens/dashboard/tabs/beranda_tab.dart';
 import 'package:warungku/screens/dashboard/tabs/laba_rugi_tab.dart';
 import 'package:warungku/screens/dashboard/tabs/penjualan_tab.dart';
 import 'package:warungku/screens/dashboard/tabs/profil_tab.dart';
+import 'package:warungku/services/product_service.dart';
 import 'package:warungku/services/token_manager.dart';
 import 'package:warungku/services/transaction_service.dart';
 import 'package:warungku/services/expense_service.dart';
@@ -2238,6 +2239,281 @@ void main() {
     expect(find.textContaining('#'), findsNothing);
     expect(find.byIcon(Icons.tag), findsNothing);
     expect(find.text('1 menu • 0/2 disajikan'), findsOneWidget);
+  });
+
+  testWidgets('BerandaTab menyegarkan Orderan Aktif saat tab kembali aktif',
+      (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1080, 2600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+
+    TransactionService.clearCache();
+    ProductService.clearCache();
+    await TokenManager.saveSession(token: 'mock_token', user: adminTokoUser);
+
+    var sudahDibayar = false;
+    var isActive = true;
+
+    http.Response ok(Map<String, dynamic> body) => http.Response(
+          jsonEncode(body),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/transactions')) {
+        return ok({
+          'success': true,
+          'data': [
+            {
+              'idTransaksi': 'TRX-BAYAR-01',
+              'id': 'PRD-001',
+              'namaItem': 'Ayam Geprek',
+              'jumlah': 1,
+              'harga': 15000.0,
+              'waktu': DateTime.now().toIso8601String(),
+              'dicatatOleh': 'Admin Toko',
+              'catatan': '',
+              'payment_method': sudahDibayar ? 'QRIS' : 'CASH',
+              'orderStatus': sudahDibayar ? 'COMPLETED' : 'PENDING',
+              'customerName': 'Meja 7',
+              'servedQty': 0,
+            },
+          ],
+        });
+      }
+      return ok({'success': true, 'data': []});
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder: (context, setState) {
+              return Column(
+                children: [
+                  Expanded(
+                    child: BerandaTab(
+                      isActive: isActive,
+                      transactionService: TransactionService(client: client),
+                      productService: ProductService(client: client),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => setState(() => isActive = !isActive),
+                    child: const Text('TOGGLE-TAB'),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Snapshot awal masih menampilkan bill berjalan.
+    expect(find.text('Meja 7'), findsOneWidget);
+
+    // Bill dilunasi dari tempat lain selagi tab ini tidak aktif.
+    sudahDibayar = true;
+    await tester.tap(find.text('TOGGLE-TAB'));
+    await tester.pumpAndSettle();
+
+    // Kembali ke tab Beranda: Orderan Aktif disegarkan dari server.
+    await tester.tap(find.text('TOGGLE-TAB'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Meja 7'), findsNothing);
+    expect(find.text('Tidak ada orderan aktif saat ini'), findsOneWidget);
+
+    TransactionService.clearCache();
+    ProductService.clearCache();
+  });
+
+  testWidgets('BerandaTab menghilangkan bill setelah Bayar & Cetak sukses',
+      (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1080, 2600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+
+    TransactionService.clearCache();
+    ProductService.clearCache();
+    await TokenManager.saveSession(token: 'mock_token', user: adminTokoUser);
+
+    var sudahDibayar = false;
+    var statusRequestCount = 0;
+
+    http.Response ok(Map<String, dynamic> body) => http.Response(
+          jsonEncode(body),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+
+    final client = MockClient((request) async {
+      if (request.method == 'PATCH' &&
+          request.url.path.endsWith('/status')) {
+        statusRequestCount++;
+        sudahDibayar = true;
+        return ok({'success': true, 'message': 'Status diperbarui'});
+      }
+      if (request.url.path.endsWith('/transactions')) {
+        return ok({
+          'success': true,
+          'data': [
+            {
+              'idTransaksi': 'TRX-BAYAR-02',
+              'id': 'PRD-001',
+              'namaItem': 'Nasi Goreng',
+              'jumlah': 2,
+              'harga': 20000.0,
+              'waktu': DateTime.now().toIso8601String(),
+              'dicatatOleh': 'Admin Toko',
+              'catatan': '',
+              'payment_method': sudahDibayar ? 'QRIS' : 'CASH',
+              'orderStatus': sudahDibayar ? 'COMPLETED' : 'READY',
+              'customerName': 'Meja 8',
+              'servedQty': 2,
+            },
+          ],
+        });
+      }
+      return ok({'success': true, 'data': []});
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: BerandaTab(
+            transactionService: TransactionService(client: client),
+            productService: ProductService(client: client),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Buka kartu lalu lunasi lewat dialog pembayaran.
+    expect(find.text('Meja 8'), findsOneWidget);
+    await tester.tap(find.text('Meja 8'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Bayar & Cetak'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Konfirmasi Bayar'));
+    await tester.pumpAndSettle();
+
+    expect(statusRequestCount, 1);
+
+    // Tutup pratinjau struk; bill harus sudah tidak ada di Orderan Aktif.
+    if (find.text('Tutup').evaluate().isNotEmpty) {
+      await tester.tap(find.text('Tutup'));
+      await tester.pumpAndSettle();
+    }
+    expect(find.text('Meja 8'), findsNothing);
+    expect(find.text('Tidak ada orderan aktif saat ini'), findsOneWidget);
+
+    TransactionService.clearCache();
+    ProductService.clearCache();
+  });
+
+  testWidgets('BerandaTab mematikan Bayar & Cetak untuk role OWNER',
+      (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1080, 2600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+
+    TransactionService.clearCache();
+    ProductService.clearCache();
+    await TokenManager.saveSession(token: 'mock_token', user: ownerUser);
+
+    http.Response ok(Map<String, dynamic> body) => http.Response(
+          jsonEncode(body),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/transactions')) {
+        return ok({
+          'success': true,
+          'data': [
+            {
+              'idTransaksi': 'TRX-OWNER-01',
+              'id': 'PRD-001',
+              'namaItem': 'Es Teh Manis',
+              'jumlah': 1,
+              'harga': 5000.0,
+              'waktu': DateTime.now().toIso8601String(),
+              'dicatatOleh': 'Admin Toko',
+              'catatan': '',
+              'payment_method': 'CASH',
+              'orderStatus': 'READY',
+              'customerName': 'Meja 9',
+              'servedQty': 1,
+            },
+          ],
+        });
+      }
+      return ok({'success': true, 'data': []});
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: BerandaTab(
+            transactionService: TransactionService(client: client),
+            productService: ProductService(client: client),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Meja 9'));
+    await tester.pumpAndSettle();
+
+    final tombolBayar = tester.widget<ElevatedButton>(
+      find.ancestor(
+        of: find.text('Bayar & Cetak'),
+        matching: find.byType(ElevatedButton),
+      ),
+    );
+    expect(tombolBayar.onPressed, isNull);
+
+    TransactionService.clearCache();
+    ProductService.clearCache();
+  });
+
+  testWidgets('RiwayatTransaksiCard compact menampilkan waktu dalam zona lokal',
+      (WidgetTester tester) async {
+    const trx = TransactionModel(
+      idTransaksi: 'TRX-LOKAL-01',
+      id: 'PRD-001',
+      namaItem: 'Kopi Tubruk',
+      jumlah: 1,
+      harga: 8000,
+      waktu: '2026-09-21T05:16:14Z',
+      dicatatOleh: 'Kasir',
+      catatan: '',
+      paymentMethod: 'QRIS',
+      orderStatus: 'COMPLETED',
+      customerName: 'Bapak',
+    );
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: RiwayatTransaksiCard(trx: trx, isCompact: true),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    // Jam UTC dari server dikonversi ke zona waktu perangkat.
+    expect(
+      find.textContaining(waktuLokalLengkap('2026-09-21T05:16:14Z')),
+      findsOneWidget,
+    );
   });
 }
 

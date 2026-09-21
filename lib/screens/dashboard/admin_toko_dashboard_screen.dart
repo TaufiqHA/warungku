@@ -152,6 +152,7 @@ class _AdminTokoDashboardScreenState extends State<AdminTokoDashboardScreen> {
 
     final tabs = [
       BerandaTab(
+        isActive: _currentIndex == 0,
         onGoToPenjualan: () => _switchTab(1),
         onGoToBarang: () => _switchTab(2),
         onGoToProfil: () => _switchTab(3),

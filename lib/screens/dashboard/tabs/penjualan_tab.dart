@@ -86,13 +86,21 @@ class _PenjualanTabState extends State<PenjualanTab> {
     }).toList();
   }
 
+  /// Kunci tanggal lokal (`2026-09-21`) dari waktu ISO server, supaya
+  /// pengelompokan bill sejalan dengan jam yang ditampilkan ke pengguna.
+  String _dateKeyLokal(String waktu) {
+    final dt = TanggalFormatter.parse(waktu);
+    if (dt == null) {
+      final raw = waktu.trim();
+      return raw.length >= 10 ? raw.substring(0, 10) : raw;
+    }
+    return TanggalFormatter.keIso(dt.isUtc ? dt.toLocal() : dt);
+  }
+
   Map<String, List<TransactionGroup>> get _groupedTransactions {
     final Map<String, List<TransactionGroup>> map = {};
     for (final g in _filteredTransactions) {
-      String dateKey = g.waktu.trim();
-      if (dateKey.length >= 10) {
-        dateKey = dateKey.substring(0, 10);
-      }
+      final dateKey = _dateKeyLokal(g.waktu);
       map.putIfAbsent(dateKey, () => []).add(g);
     }
     for (final key in map.keys) {

@@ -18,6 +18,19 @@ import 'package:warungku/data/models/transaction_model.dart';
 import 'package:warungku/data/models/transaction_group_model.dart';
 import 'package:warungku/widgets/riwayat_transaksi_card.dart';
 
+/// `19 Sep 2026, 13:22` dalam zona waktu perangkat, dihitung manual agar isi
+/// kartu tetap teruji tanpa memakai ulang formatter produksi.
+String waktuLokalLengkap(String iso) {
+  const bulan = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+    'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des',
+  ];
+  final dt = DateTime.parse(iso).toLocal();
+  return '${dt.day} ${bulan[dt.month - 1]} ${dt.year}, '
+      '${dt.hour.toString().padLeft(2, '0')}:'
+      '${dt.minute.toString().padLeft(2, '0')}';
+}
+
 void main() {
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
@@ -317,7 +330,10 @@ void main() {
 
     expect(find.text('Kak Jimmy'), findsOneWidget);
     expect(find.text('TRX-20260919132251'), findsOneWidget);
-    expect(find.textContaining('19 Sep 2026, 13:22'), findsOneWidget);
+    expect(
+      find.textContaining(waktuLokalLengkap('2026-09-19T13:22:51Z')),
+      findsOneWidget,
+    );
     expect(find.textContaining('2 item'), findsOneWidget);
     expect(find.text('CASH'), findsOneWidget);
     expect(find.text('Rp 30.000'), findsOneWidget);

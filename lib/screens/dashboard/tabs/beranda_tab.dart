@@ -24,6 +24,15 @@ class BerandaTab extends StatefulWidget {
   final VoidCallback? onOpenMonthlyReport;
   final VoidCallback? onQuickLogout;
 
+  /// Menandai tab ini sedang terlihat di dashboard. Saat berubah dari `false`
+  /// ke `true`, Orderan Aktif disegarkan ulang agar bill yang sudah dilunasi
+  /// di sesi/perangkat lain tidak tertinggal di layar.
+  final bool isActive;
+
+  /// Service opsional untuk injeksi pada pengujian.
+  final TransactionService? transactionService;
+  final ProductService? productService;
+
   const BerandaTab({
     super.key,
     this.onGoToPenjualan,
@@ -33,15 +42,18 @@ class BerandaTab extends StatefulWidget {
     this.onGoToUserManagement,
     this.onOpenMonthlyReport,
     this.onQuickLogout,
+    this.isActive = true,
+    this.transactionService,
+    this.productService,
   });
 
   @override
   State<BerandaTab> createState() => _BerandaTabState();
 }
 
-class _BerandaTabState extends State<BerandaTab> {
-  final _transactionService = TransactionService();
-  final _productService = ProductService();
+class _BerandaTabState extends State<BerandaTab> with WidgetsBindingObserver {
+  late final TransactionService _transactionService;
+  late final ProductService _productService;
 
   UserModel? _currentUser;
   List<OrderanAktifGroup> _activeOrders = [];
@@ -54,7 +66,33 @@ class _BerandaTabState extends State<BerandaTab> {
   @override
   void initState() {
     super.initState();
+    _transactionService = widget.transactionService ?? TransactionService();
+    _productService = widget.productService ?? ProductService();
+    WidgetsBinding.instance.addObserver(this);
     _loadData();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant BerandaTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Kembali ke tab Beranda: samakan lagi dengan status terbaru di server.
+    if (widget.isActive && !oldWidget.isActive) {
+      _refreshTransactionsSilently();
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Aplikasi kembali ke depan: bill bisa saja dilunasi dari perangkat lain.
+    if (state == AppLifecycleState.resumed) {
+      _refreshTransactionsSilently();
+    }
   }
 
   Future<void> _loadData({bool forceRefresh = false}) async {
@@ -69,48 +107,13 @@ class _BerandaTabState extends State<BerandaTab> {
         forceRefresh: forceRefresh,
       ).catchError((_) => <ProductModel>[]);
 
-      // Pisahkan transaksi aktif (status hingga READY, selain COMPLETED dan CANCELLED)
-      final activeTransactions = rawTransactions.where((t) => t.isActiveOrder).toList();
-
-      // Kelompokkan Orderan Aktif per idTransaksi
-      final Map<String, List<TransactionModel>> grouped = {};
-      for (final item in activeTransactions) {
-        grouped.putIfAbsent(item.idTransaksi, () => []).add(item);
-      }
-
-      final activeGroups = grouped.entries.map((entry) {
-        final first = entry.value.first;
-        final orderStatus = entry.value
-            .map((e) => e.orderStatus)
-            .firstWhere((s) => s.isNotEmpty, orElse: () => first.orderStatus);
-
-        return OrderanAktifGroup(
-          transactionId: entry.key,
-          customerName: first.customerName,
-          waktu: first.waktu,
-          orderStatus: orderStatus,
-          items: entry.value,
-        );
-      }).toList();
-
-      // Kelompokkan transaksi selesai hari ini per idTransaksi (bill riil)
-      final completedGroups = TransactionGroup.fromTransactionList(rawTransactions)
-          .where((g) => g.isCompleted && TanggalFormatter.isToday(g.waktu))
-          .toList();
-
-      // Hitung omzet hari ini hanya dari transaksi yang telah selesai (bukan dibatalkan/pending)
-      final double sum = completedGroups.fold(0.0, (acc, g) => acc + g.totalHarga);
-      final int completedCount = completedGroups.length;
-
       if (mounted) {
         setState(() {
           _currentUser = user;
-          _activeOrders = activeGroups;
           _allProducts = products;
           _totalProducts = products.length;
-          _todayOmzet = sum;
-          _todayTrxCount = completedCount;
           _isLoading = false;
+          _applyTransactionSummary(rawTransactions);
         });
       }
     } catch (_) {
@@ -118,6 +121,67 @@ class _BerandaTabState extends State<BerandaTab> {
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  /// Menyegarkan Orderan Aktif secara senyap (tanpa spinner penuh) dan tanpa
+  /// menyentuh daftar produk. Dipakai saat tab kembali aktif atau aplikasi
+  /// kembali ke depan; unduhan dipaksa agar perubahan status dari perangkat
+  /// lain langsung terlihat.
+  Future<void> _refreshTransactionsSilently() async {
+    try {
+      final rawTransactions = await _transactionService.getTransactions(
+        filter: 'Hari Ini',
+        forceRefresh: true,
+      );
+      if (!mounted) return;
+      setState(() => _applyTransactionSummary(rawTransactions));
+    } catch (_) {
+      // Pertahankan data lama bila penyegaran senyap gagal.
+    }
+  }
+
+  /// Menghitung ulang Orderan Aktif dan metrik hari ini dari daftar transaksi
+  /// mentah. Wajib dipanggil di dalam `setState`.
+  void _applyTransactionSummary(List<TransactionModel> rawTransactions) {
+    _activeOrders = _buildActiveGroups(rawTransactions);
+
+    final completedGroups = _completedTodayGroups(rawTransactions);
+    _todayOmzet = completedGroups.fold(0.0, (acc, g) => acc + g.totalHarga);
+    _todayTrxCount = completedGroups.length;
+  }
+
+  /// Kelompokkan transaksi aktif (selain COMPLETED dan CANCELLED) per idTransaksi.
+  List<OrderanAktifGroup> _buildActiveGroups(
+    List<TransactionModel> rawTransactions,
+  ) {
+    final Map<String, List<TransactionModel>> grouped = {};
+    for (final item in rawTransactions.where((t) => t.isActiveOrder)) {
+      grouped.putIfAbsent(item.idTransaksi, () => []).add(item);
+    }
+
+    return grouped.entries.map((entry) {
+      final first = entry.value.first;
+      final orderStatus = entry.value
+          .map((e) => e.orderStatus)
+          .firstWhere((s) => s.isNotEmpty, orElse: () => first.orderStatus);
+
+      return OrderanAktifGroup(
+        transactionId: entry.key,
+        customerName: first.customerName,
+        waktu: first.waktu,
+        orderStatus: orderStatus,
+        items: entry.value,
+      );
+    }).toList();
+  }
+
+  /// Kelompokkan transaksi selesai hari ini per idTransaksi (bill riil).
+  List<TransactionGroup> _completedTodayGroups(
+    List<TransactionModel> rawTransactions,
+  ) {
+    return TransactionGroup.fromTransactionList(rawTransactions)
+        .where((g) => g.isCompleted && TanggalFormatter.isToday(g.waktu))
+        .toList();
   }
 
   String _formatRupiah(double amount) {
@@ -243,7 +307,17 @@ class _BerandaTabState extends State<BerandaTab> {
           paymentMethod: paymentMethod,
           discountAmount: discountAmount,
         );
-        _loadData(forceRefresh: true);
+
+        if (!mounted) return;
+
+        // Optimistis: bill yang baru dilunasi langsung hilang dari Orderan
+        // Aktif, lalu disinkronkan ulang dengan data server.
+        setState(() {
+          _activeOrders = _activeOrders
+              .where((g) => g.transactionId != group.transactionId)
+              .toList();
+        });
+        await _loadData(forceRefresh: true);
 
         if (mounted) {
           await SalesReceiptDialog.showFromOrderGroup(
@@ -572,7 +646,10 @@ class _BerandaTabState extends State<BerandaTab> {
                   autoPrint: false,
                 ),
                 onAddItem: _currentUser?.role == 'OWNER' ? null : () => _handleAddItem(group),
-                onPayAndPrint: () => _handlePayAndPrint(group),
+                // Pelunasan hanya diizinkan API untuk ADMIN_TOKO; tombol
+                // dimatikan untuk OWNER agar tidak berujung galat 403.
+                onPayAndPrint:
+                    _currentUser?.role == 'OWNER' ? null : () => _handlePayAndPrint(group),
               );
             }),
         ],
