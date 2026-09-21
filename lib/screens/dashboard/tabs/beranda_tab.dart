@@ -562,6 +562,7 @@ class _BerandaTabState extends State<BerandaTab> {
           else
             ..._activeOrders.map((group) {
               return OrderanAktifCard(
+                key: ValueKey('orderan-aktif-${group.transactionId}'),
                 group: group,
                 onIncrementServed: (item) => _handleIncrementServed(item, group),
                 onDecrementServed: (item) => _handleDecrementServed(item, group),

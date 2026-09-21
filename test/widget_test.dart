@@ -37,6 +37,19 @@ import 'package:warungku/widgets/printer_settings_dialog.dart';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// `12 Sep 2026, 01:00` dalam zona waktu perangkat, dihitung manual tanpa
+/// memakai `TanggalFormatter` agar urutan & isi header kartu tetap teruji.
+String waktuLokalLengkap(String iso) {
+  const bulan = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+    'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des',
+  ];
+  final dt = DateTime.parse(iso).toLocal();
+  return '${dt.day} ${bulan[dt.month - 1]} ${dt.year}, '
+      '${dt.hour.toString().padLeft(2, '0')}:'
+      '${dt.minute.toString().padLeft(2, '0')}';
+}
+
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
@@ -343,6 +356,30 @@ void main() {
     );
     await tester.pump();
 
+    // Kartu tampil ringkas lebih dulu: nama, nomor transaksi, lalu waktu
+    // transaksi lengkap dengan tanggal, plus ringkasan bill
+    expect(find.text('Meja 5'), findsOneWidget);
+    expect(find.text('#TRX-001'), findsOneWidget);
+    expect(find.text(waktuLokalLengkap('2026-09-12T01:00:00Z')), findsOneWidget);
+    expect(find.text('1 menu • 1/3 disajikan'), findsOneWidget);
+    expect(find.text('Rp 45.000'), findsOneWidget);
+
+    // Urutan header: nama → nomor transaksi → waktu transaksi
+    final yNama = tester.getCenter(find.text('Meja 5')).dy;
+    final yNomor = tester.getCenter(find.text('#TRX-001')).dy;
+    final yWaktu =
+        tester.getCenter(find.text(waktuLokalLengkap('2026-09-12T01:00:00Z'))).dy;
+    expect(yNomor, greaterThan(yNama));
+    expect(yWaktu, greaterThan(yNomor));
+
+    // Rincian item tersembunyi selama kartu tertutup
+    expect(find.text('3x Roti Bakar'), findsNothing);
+    expect(find.text('Bayar & Cetak'), findsNothing);
+
+    // Tap header membuka rincian item
+    await tester.tap(find.text('Meja 5'));
+    await tester.pumpAndSettle();
+
     // Verifikasi nama customer dan item
     expect(find.text('Meja 5'), findsOneWidget);
     expect(find.text('3x Roti Bakar'), findsOneWidget);
@@ -404,6 +441,7 @@ void main() {
         home: Scaffold(
           body: OrderanAktifCard(
             group: groupSiapBayar,
+            initiallyExpanded: true,
             onPayAndPrint: () => payClicked = true,
           ),
         ),
@@ -1779,8 +1817,14 @@ void main() {
     );
     await tester.pump();
 
-    // Badge status harus menampilkan 'Siap Saji'
+    // Badge status harus menampilkan 'Siap Saji' (tampil di header walau kartu ringkas)
     expect(find.text('Siap Saji'), findsOneWidget);
+    expect(find.text('#TRX-READY-01'), findsOneWidget);
+
+    // Tombol Bayar & Cetak baru tersedia setelah kartu diperluas
+    expect(find.text('Bayar & Cetak'), findsNothing);
+    await tester.tap(find.text('Meja 7'));
+    await tester.pumpAndSettle();
 
     // Tombol Bayar & Cetak harus aktif dan bisa diklik
     await tester.tap(find.text('Bayar & Cetak'));
@@ -2054,6 +2098,146 @@ void main() {
 
     TransactionService.clearCache();
     ExpenseService.clearCache();
+  });
+
+  test('TanggalFormatter.jamMenit & tanggalJam memformat waktu lokal dan kosong bila tak dikenali', () {
+    // Waktu tanpa zona dianggap waktu lokal apa adanya (tidak bergantung zona mesin uji).
+    expect(TanggalFormatter.jamMenit('2026-09-20T14:08:00'), '14:08');
+    expect(TanggalFormatter.tanggalJam('2026-09-20T14:08:00'), '20 Sep 2026, 14:08');
+    expect(TanggalFormatter.tanggalJam('2026-09-12T01:00:00Z'),
+        waktuLokalLengkap('2026-09-12T01:00:00Z'));
+
+    // Penanda `Z` (UTC) dikonversi ke zona waktu perangkat dan tetap 2 digit.
+    expect(TanggalFormatter.tanggalJam('2026-09-20T01:00:00Z'),
+        waktuLokalLengkap('2026-09-20T01:00:00Z'));
+    expect(TanggalFormatter.jamMenit('2026-09-20T01:00:00Z'),
+        waktuLokalLengkap('2026-09-20T01:00:00Z').split(', ').last);
+
+    // Format tanggal tampilan tanpa jam tidak menghasilkan baris waktu.
+    expect(TanggalFormatter.jamMenit('20 Sep 2026'), '');
+    expect(TanggalFormatter.tanggalJam('20 Sep 2026'), '');
+    expect(TanggalFormatter.jamMenit(''), '');
+    expect(TanggalFormatter.tanggalJam(''), '');
+    expect(TanggalFormatter.jamMenit(null), '');
+    expect(TanggalFormatter.tanggalJam(null), '');
+  });
+
+  testWidgets('OrderanAktifCard menampilkan nama, nomor, lalu waktu transaksi dan bisa dibuka-tutup', (WidgetTester tester) async {
+    final item = const TransactionModel(
+      idTransaksi: 'TRX-WAKTU',
+      id: 'PRD-001',
+      namaItem: 'Nasi Goreng Telur',
+      jumlah: 1,
+      harga: 20000,
+      waktu: '2026-09-20T01:00:00Z',
+      dicatatOleh: 'Admin Toko',
+      catatan: '',
+      paymentMethod: 'CASH',
+      orderStatus: 'PENDING',
+      customerName: 'Eko',
+    );
+
+    final group = OrderanAktifGroup(
+      transactionId: 'TRX-WAKTU',
+      customerName: 'Eko',
+      waktu: '2026-09-20T01:00:00Z',
+      items: [item],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: OrderanAktifCard(group: group),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    // Header ringkas: nama, lalu nomor transaksi, lalu waktu transaksi
+    expect(find.text('Eko'), findsOneWidget);
+    expect(find.text('#TRX-WAKTU'), findsOneWidget);
+    expect(find.text(waktuLokalLengkap('2026-09-20T01:00:00Z')), findsOneWidget);
+    expect(find.byIcon(Icons.tag), findsOneWidget);
+    expect(find.byIcon(Icons.access_time), findsOneWidget);
+    expect(find.text('1x Nasi Goreng Telur'), findsNothing);
+
+    final yNama = tester.getCenter(find.text('Eko')).dy;
+    final yNomor = tester.getCenter(find.text('#TRX-WAKTU')).dy;
+    final yWaktu =
+        tester.getCenter(find.text(waktuLokalLengkap('2026-09-20T01:00:00Z'))).dy;
+    expect(yNomor, greaterThan(yNama));
+    expect(yWaktu, greaterThan(yNomor));
+
+    // Tap header dua kali: buka lalu tutup kembali
+    await tester.tap(find.text('Eko'));
+    await tester.pumpAndSettle();
+    expect(find.text('1x Nasi Goreng Telur'), findsOneWidget);
+
+    await tester.tap(find.text('Eko'));
+    await tester.pumpAndSettle();
+    expect(find.text('1x Nasi Goreng Telur'), findsNothing);
+
+    // Nomor transaksi tetap tampil di kedua keadaan
+    expect(find.text('#TRX-WAKTU'), findsOneWidget);
+
+    // Tanpa waktu yang bisa dibaca: nama dan nomor tetap tampil, baris jam hilang
+    final groupTanpaWaktu = OrderanAktifGroup(
+      transactionId: 'TRX-TANPA-WAKTU',
+      customerName: 'Bapak',
+      waktu: '',
+      items: [item],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: OrderanAktifCard(group: groupTanpaWaktu),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Bapak'), findsOneWidget);
+    expect(find.text('#TRX-TANPA-WAKTU'), findsOneWidget);
+    expect(find.byIcon(Icons.access_time), findsNothing);
+  });
+
+  testWidgets('OrderanAktifCard memakai label Pesanan dan melewatkan pemisah saat nomor transaksi kosong', (WidgetTester tester) async {
+    final group = OrderanAktifGroup(
+      transactionId: '',
+      customerName: '-',
+      waktu: '2026-09-20T01:00:00Z',
+      items: const [
+        TransactionModel(
+          idTransaksi: '',
+          id: 'PRD-001',
+          namaItem: 'Es Teh Manis',
+          jumlah: 2,
+          harga: 5000,
+          waktu: '2026-09-20T01:00:00Z',
+          dicatatOleh: 'Admin Toko',
+          catatan: '',
+          paymentMethod: 'CASH',
+          orderStatus: 'PENDING',
+          customerName: '-',
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: OrderanAktifCard(group: group),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Pesanan'), findsOneWidget);
+    expect(find.text(waktuLokalLengkap('2026-09-20T01:00:00Z')), findsOneWidget);
+    expect(find.textContaining('#'), findsNothing);
+    expect(find.byIcon(Icons.tag), findsNothing);
+    expect(find.text('1 menu • 0/2 disajikan'), findsOneWidget);
   });
 }
 

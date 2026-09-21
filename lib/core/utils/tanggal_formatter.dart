@@ -113,6 +113,36 @@ class TanggalFormatter {
     return DateTime(year, month, day);
   }
 
+  /// `14:08` — jam lokal (HH:mm) dari string waktu ISO server.
+  ///
+  /// Mengembalikan string kosong bila nilai tidak memuat komponen jam
+  /// (misalnya tanggal tampilan `18 Sep 2026`) sehingga pemanggil dapat
+  /// menyembunyikan barisnya.
+  static String jamMenit(String? value) {
+    final local = _waktuLokal(value);
+    if (local == null) return '';
+    return '${local.hour.toString().padLeft(2, '0')}:'
+        '${local.minute.toString().padLeft(2, '0')}';
+  }
+
+  /// `20 Sep 2026, 09:00` — tanggal dan jam lokal dari string waktu ISO server.
+  ///
+  /// Kosong bila nilai tidak dapat dibaca sebagai waktu.
+  static String tanggalJam(String? value) {
+    final local = _waktuLokal(value);
+    if (local == null) return '';
+    return '${singkat(local)}, ${jamMenit(value)}';
+  }
+
+  /// Membaca string waktu server menjadi `DateTime` lokal.
+  /// Mengembalikan null bila tidak dapat di-parse atau tidak punya komponen jam.
+  static DateTime? _waktuLokal(String? value) {
+    if (value == null || value.trim().isEmpty) return null;
+    final dt = DateTime.tryParse(value.trim());
+    if (dt == null) return null;
+    return dt.isUtc ? dt.toLocal() : dt;
+  }
+
   /// Mengecek apakah tanggal dari server sama dengan tanggal hari ini pada zona waktu lokal.
   static bool isToday(String? value) {
     if (value == null || value.trim().isEmpty) return false;
