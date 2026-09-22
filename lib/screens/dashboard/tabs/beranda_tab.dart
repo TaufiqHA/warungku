@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../core/utils/tanggal_formatter.dart';
 import '../../../data/models/auth_model.dart';
@@ -55,6 +56,8 @@ class _BerandaTabState extends State<BerandaTab> with WidgetsBindingObserver {
   late final TransactionService _transactionService;
   late final ProductService _productService;
 
+  Timer? _pollingTimer;
+
   UserModel? _currentUser;
   List<OrderanAktifGroup> _activeOrders = [];
   List<ProductModel> _allProducts = [];
@@ -70,10 +73,12 @@ class _BerandaTabState extends State<BerandaTab> with WidgetsBindingObserver {
     _productService = widget.productService ?? ProductService();
     WidgetsBinding.instance.addObserver(this);
     _loadData();
+    _startPolling();
   }
 
   @override
   void dispose() {
+    _stopPolling();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -84,15 +89,36 @@ class _BerandaTabState extends State<BerandaTab> with WidgetsBindingObserver {
     // Kembali ke tab Beranda: samakan lagi dengan status terbaru di server.
     if (widget.isActive && !oldWidget.isActive) {
       _refreshTransactionsSilently();
+      _startPolling();
+    } else if (!widget.isActive && oldWidget.isActive) {
+      _stopPolling();
     }
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // Aplikasi kembali ke depan: bill bisa saja dilunasi dari perangkat lain.
-    if (state == AppLifecycleState.resumed) {
+    if (state == AppLifecycleState.resumed && widget.isActive) {
       _refreshTransactionsSilently();
+      _startPolling();
+    } else if (state == AppLifecycleState.paused) {
+      _stopPolling();
     }
+  }
+
+  void _startPolling() {
+    _stopPolling();
+    if (!widget.isActive) return;
+    _pollingTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (mounted && widget.isActive) {
+        _refreshTransactionsSilently();
+      }
+    });
+  }
+
+  void _stopPolling() {
+    _pollingTimer?.cancel();
+    _pollingTimer = null;
   }
 
   Future<void> _loadData({bool forceRefresh = false}) async {

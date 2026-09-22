@@ -13,19 +13,23 @@ import '../../transaksi/transaksi_penjualan_screen.dart';
 class PenjualanTab extends StatefulWidget {
   final bool canAddTransaction;
   final String? initialFilter;
+  final bool isActive;
+  final TransactionService? transactionService;
 
   const PenjualanTab({
     super.key,
     this.canAddTransaction = true,
     this.initialFilter,
+    this.isActive = true,
+    this.transactionService,
   });
 
   @override
   State<PenjualanTab> createState() => _PenjualanTabState();
 }
 
-class _PenjualanTabState extends State<PenjualanTab> {
-  final _transactionService = TransactionService();
+class _PenjualanTabState extends State<PenjualanTab> with WidgetsBindingObserver {
+  late final TransactionService _transactionService;
 
   final _searchController = TextEditingController();
   late String _selectedFilter;
@@ -38,15 +42,33 @@ class _PenjualanTabState extends State<PenjualanTab> {
   @override
   void initState() {
     super.initState();
+    _transactionService = widget.transactionService ?? TransactionService();
     _defaultFilter = widget.initialFilter ?? (widget.canAddTransaction ? 'Hari Ini' : 'Minggu Ini');
     _selectedFilter = _defaultFilter;
+    WidgetsBinding.instance.addObserver(this);
     _loadData();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _searchController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant PenjualanTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive && !oldWidget.isActive) {
+      _loadData(forceRefresh: true);
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && widget.isActive) {
+      _loadData(forceRefresh: true);
+    }
   }
 
   Future<void> _loadData({bool forceRefresh = false}) async {

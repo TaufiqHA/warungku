@@ -157,7 +157,9 @@ class _AdminTokoDashboardScreenState extends State<AdminTokoDashboardScreen> {
         onGoToBarang: () => _switchTab(2),
         onGoToProfil: () => _switchTab(3),
       ),
-      const PenjualanTab(),
+      PenjualanTab(
+        isActive: _currentIndex == 1,
+      ),
       const BarangTab(),
       ProfilTab(
         onLogout: () {

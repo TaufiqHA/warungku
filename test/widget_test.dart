@@ -2515,6 +2515,223 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('PenjualanTab menyegarkan transaksi saat parameter isActive berubah ke true',
+      (WidgetTester tester) async {
+    TransactionService.clearCache();
+    await TokenManager.saveSession(token: 'mock_token', user: adminTokoUser);
+
+    var sudahAdaTransaksiBaru = false;
+    var isActive = false;
+
+    http.Response ok(Map<String, dynamic> body) => http.Response(
+          jsonEncode(body),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/transactions')) {
+        final data = [
+          if (sudahAdaTransaksiBaru)
+            {
+              'idTransaksi': 'TRX-BARU-01',
+              'id': 'PRD-001',
+              'namaItem': 'Nasi Ikan Nila',
+              'jumlah': 1,
+              'harga': 35000.0,
+              'waktu': DateTime.now().toIso8601String(),
+              'dicatatOleh': 'Admin Toko',
+              'catatan': '',
+              'payment_method': 'QRIS',
+              'orderStatus': 'COMPLETED',
+              'customerName': 'Pelanggan Baru',
+              'servedQty': 1,
+            },
+        ];
+        return ok({'success': true, 'data': data});
+      }
+      return ok({'success': true, 'data': []});
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder: (context, setState) {
+              return Column(
+                children: [
+                  Expanded(
+                    child: PenjualanTab(
+                      isActive: isActive,
+                      initialFilter: 'Hari Ini',
+                      transactionService: TransactionService(client: client),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => setState(() => isActive = !isActive),
+                    child: const Text('TOGGLE-TAB'),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Awal: belum ada transaksi baru
+    expect(find.text('Pelanggan Baru'), findsNothing);
+
+    // Transaksi lunas di tempat lain dan tab Penjualan diaktifkan
+    sudahAdaTransaksiBaru = true;
+    await tester.tap(find.text('TOGGLE-TAB'));
+    await tester.pumpAndSettle();
+
+    // Tab Penjualan memuat ulang data secara otomatis
+    expect(find.text('Pelanggan Baru'), findsOneWidget);
+
+    TransactionService.clearCache();
+  });
+
+  testWidgets('PenjualanTab hanya menampilkan transaksi COMPLETED dan mengabaikan PENDING/READY',
+      (WidgetTester tester) async {
+    TransactionService.clearCache();
+    await TokenManager.saveSession(token: 'mock_token', user: adminTokoUser);
+
+    http.Response ok(Map<String, dynamic> body) => http.Response(
+          jsonEncode(body),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/transactions')) {
+        return ok({
+          'success': true,
+          'data': [
+            {
+              'idTransaksi': 'TRX-SELESAI-01',
+              'id': 'PRD-001',
+              'namaItem': 'Es Jeruk',
+              'jumlah': 1,
+              'harga': 7000.0,
+              'waktu': DateTime.now().toIso8601String(),
+              'dicatatOleh': 'Admin Toko',
+              'catatan': '',
+              'payment_method': 'CASH',
+              'orderStatus': 'COMPLETED',
+              'customerName': 'Meja Selesai',
+              'servedQty': 1,
+            },
+            {
+              'idTransaksi': 'TRX-PENDING-01',
+              'id': 'PRD-002',
+              'namaItem': 'Nasi Uduk',
+              'jumlah': 1,
+              'harga': 15000.0,
+              'waktu': DateTime.now().toIso8601String(),
+              'dicatatOleh': 'Admin Toko',
+              'catatan': '',
+              'payment_method': 'CASH',
+              'orderStatus': 'READY',
+              'customerName': 'Meja Masih Aktif',
+              'servedQty': 1,
+            },
+          ],
+        });
+      }
+      return ok({'success': true, 'data': []});
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PenjualanTab(
+            initialFilter: 'Hari Ini',
+            transactionService: TransactionService(client: client),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Meja Selesai'), findsOneWidget);
+    expect(find.text('Meja Masih Aktif'), findsNothing);
+
+    TransactionService.clearCache();
+  });
+
+  testWidgets('BerandaTab melakukan polling berkala transaksi saat isActive bernilai true',
+      (WidgetTester tester) async {
+    TransactionService.clearCache();
+    ProductService.clearCache();
+    await TokenManager.saveSession(token: 'mock_token', user: adminTokoUser);
+
+    var sudahDibayar = false;
+
+    http.Response ok(Map<String, dynamic> body) => http.Response(
+          jsonEncode(body),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/transactions')) {
+        return ok({
+          'success': true,
+          'data': [
+            {
+              'idTransaksi': 'TRX-POLL-01',
+              'id': 'PRD-001',
+              'namaItem': 'Es Kelapa',
+              'jumlah': 1,
+              'harga': 10000.0,
+              'waktu': DateTime.now().toIso8601String(),
+              'dicatatOleh': 'Admin Toko',
+              'catatan': '',
+              'payment_method': sudahDibayar ? 'QRIS' : 'CASH',
+              'orderStatus': sudahDibayar ? 'COMPLETED' : 'READY',
+              'customerName': 'Meja Polling',
+              'servedQty': 1,
+            },
+          ],
+        });
+      }
+      return ok({'success': true, 'data': []});
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: BerandaTab(
+            isActive: true,
+            transactionService: TransactionService(client: client),
+            productService: ProductService(client: client),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Awal: Meja Polling ada di antrean Orderan Aktif
+    expect(find.text('Meja Polling'), findsOneWidget);
+
+    // Transaksi dilunasi di perangkat lain tanpa aksi manual di tab Beranda
+    sudahDibayar = true;
+
+    // Majukan timer polling (10 detik)
+    await tester.pump(const Duration(seconds: 10));
+    await tester.pumpAndSettle();
+
+    // Otomatis tersinkronisasi: Meja Polling hilang dari Orderan Aktif
+    expect(find.text('Meja Polling'), findsNothing);
+    expect(find.text('Tidak ada orderan aktif saat ini'), findsOneWidget);
+
+    TransactionService.clearCache();
+    ProductService.clearCache();
+  });
 }
 
 

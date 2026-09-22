@@ -150,11 +150,4 @@ Dokumen ini berfungsi sebagai katalog sentral untuk seluruh elemen dan komponen 
 - `2026-09-13`: Implementasi pencetakan PDF khusus untuk Laporan Bulanan (`MonthlyReportPdfService`) dengan format A4 rapi dan minimalis (ringkasan kinerja, tabel menu terlaris, rekap harian), serta mempertahankan printer thermal Bluetooth untuk struk kasir dan dapur.
 - `2026-09-13`: Optimasi performa dan pengurangan request API seluruh layar Owner: Lazy Tab Loading pada `OwnerDashboardScreen` (hanya instansiasi tab saat diklik), Auto-Load Riwayat Penjualan per Tanggal & Beban Pengeluaran secara paralel saat `LabaRugiTab` diakses tanpa tombol manual, in-memory TTL caching (60 detik) pada `TransactionService`, `ExpenseService`, `UserService`, dan `ProductService`, serta instant local computation pada `MonthlyReportScreen`.
 - `2026-09-13`: Redesain kartu navigasi cepat (*Quick Actions*) pada `BerandaTab` khusus Admin Toko. Menghilangkan ruang kosong di sebelah kanan dengan menerapkan pembagian lebar penuh merata dan simetris (`Expanded(child: _buildQuickAction)`) untuk 3 menu (Penjualan, Barang, Profil), serta mempertahankan responsivitas menu Owner (5 menu) via `ConstrainedBox(minWidth: constraints.maxWidth)`.
-
-
-
-
-
-
-
-
+- `2026-09-22`: **Sinkronisasi Orderan Aktif dan Halaman Penjualan**. Memastikan pesanan yang telah dilunasi (`COMPLETED`) otomatis tampil di Halaman Penjualan dan tidak lagi muncul di Orderan Aktif Beranda: (1) `PenjualanTab` menerima parameter `isActive` dan mengimplementasikan `WidgetsBindingObserver` & `didUpdateWidget`, sehingga saat berpindah tab dari Beranda ke Penjualan atau saat aplikasi kembali ke foreground (`resumed`), data riwayat penjualan otomatis dimuat ulang (`forceRefresh: true`) tanpa perlu pull-to-refresh manual; (2) `BerandaTab` menambahkan timer polling berkala (10 detik) saat tab aktif dan aplikasi aktif (sesuai spesifikasi `plan/screen.md` item 2.4), menyinkronkan status pesanan secara senyap (`_refreshTransactionsSilently`) agar pesanan yang dilunasi dari perangkat kasir lain otomatis terhapus dari antrean Orderan Aktif.
