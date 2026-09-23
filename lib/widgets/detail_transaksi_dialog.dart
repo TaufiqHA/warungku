@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/utils/tanggal_formatter.dart';
 import '../data/models/transaction_group_model.dart';
 import '../data/models/transaction_model.dart';
 
@@ -54,12 +55,14 @@ class DetailTransaksiDialog extends StatelessWidget {
     return buffer.toString();
   }
 
-  String _formatWaktu(String raw) {
+  String _formatWaktu(String raw, [String? idTransaksi]) {
+    final formatted = TanggalFormatter.tanggalJam(raw, idTransaksi: idTransaksi);
+    if (formatted.isNotEmpty) return formatted;
     try {
       final dt = DateTime.parse(raw).toLocal();
       const months = [
         'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
-        'Jul', 'Ags', 'Sep', 'Okt', 'Nov', 'Des'
+        'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'
       ];
       final day = dt.day.toString().padLeft(2, '0');
       final month = months[dt.month - 1];
@@ -168,7 +171,7 @@ class DetailTransaksiDialog extends StatelessWidget {
                         const SizedBox(height: 8),
                         _buildDetailRow(
                           label: 'Waktu',
-                          value: _formatWaktu(effectiveGroup.waktu),
+                          value: _formatWaktu(effectiveGroup.waktu, effectiveGroup.idTransaksi),
                           theme: theme,
                         ),
                         const SizedBox(height: 8),
@@ -210,7 +213,7 @@ class DetailTransaksiDialog extends StatelessWidget {
                 // Multi-Item Layout
                 _buildDetailRow(
                   label: 'Waktu',
-                  value: _formatWaktu(effectiveGroup.waktu),
+                  value: _formatWaktu(effectiveGroup.waktu, effectiveGroup.idTransaksi),
                   theme: theme,
                 ),
                 const SizedBox(height: 8),

@@ -19,9 +19,8 @@ class OrderanAktifGroup {
 
   double get totalHarga => items.fold(0, (sum, item) => sum + item.totalHarga);
 
-  /// Waktu transaksi lengkap dengan tanggal (`20 Sep 2026, 09:00`).
-  /// Kosong bila waktu tidak dapat dibaca dari server.
-  String get waktuLengkap => TanggalFormatter.tanggalJam(waktu);
+  String get waktuLengkap =>
+      TanggalFormatter.tanggalJam(waktu, idTransaksi: transactionId);
 
   /// Nomor transaksi siap tampil (`#TRX-20260920-01`).
   String get nomorTransaksi =>

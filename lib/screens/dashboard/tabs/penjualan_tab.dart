@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../../core/utils/tanggal_formatter.dart';
+import '../../../data/models/auth_model.dart';
 import '../../../data/models/transaction_group_model.dart';
+import '../../../services/token_manager.dart';
 import '../../../services/transaction_service.dart';
 import '../../../widgets/app_card.dart';
 import '../../../widgets/app_dialog.dart';
@@ -12,16 +14,20 @@ import '../../transaksi/transaksi_penjualan_screen.dart';
 
 class PenjualanTab extends StatefulWidget {
   final bool canAddTransaction;
+  final bool? canDeleteTransaction;
   final String? initialFilter;
   final bool isActive;
   final TransactionService? transactionService;
+  final UserModel? testUser;
 
   const PenjualanTab({
     super.key,
     this.canAddTransaction = true,
+    this.canDeleteTransaction,
     this.initialFilter,
     this.isActive = true,
     this.transactionService,
+    this.testUser,
   });
 
   @override
@@ -30,6 +36,7 @@ class PenjualanTab extends StatefulWidget {
 
 class _PenjualanTabState extends State<PenjualanTab> with WidgetsBindingObserver {
   late final TransactionService _transactionService;
+  UserModel? _currentUser;
 
   final _searchController = TextEditingController();
   late String _selectedFilter;
@@ -39,14 +46,35 @@ class _PenjualanTabState extends State<PenjualanTab> with WidgetsBindingObserver
   List<TransactionGroup> _transactionGroups = [];
   bool _isLoading = true;
 
+  bool get _canDelete {
+    if (widget.canDeleteTransaction != null) {
+      return widget.canDeleteTransaction!;
+    }
+    if (_currentUser != null) {
+      return _currentUser!.role == 'OWNER';
+    }
+    return !widget.canAddTransaction;
+  }
+
   @override
   void initState() {
     super.initState();
+    _currentUser = widget.testUser;
     _transactionService = widget.transactionService ?? TransactionService();
     _defaultFilter = widget.initialFilter ?? (widget.canAddTransaction ? 'Hari Ini' : 'Minggu Ini');
     _selectedFilter = _defaultFilter;
     WidgetsBinding.instance.addObserver(this);
+    _initUser();
     _loadData();
+  }
+
+  Future<void> _initUser() async {
+    if (_currentUser == null) {
+      final user = await TokenManager.getUser();
+      if (mounted) {
+        setState(() => _currentUser = user);
+      }
+    }
   }
 
   @override
@@ -82,7 +110,9 @@ class _PenjualanTabState extends State<PenjualanTab> with WidgetsBindingObserver
         setState(() {
           var filteredList = list;
           if (_selectedFilter == 'Hari Ini') {
-            filteredList = list.where((t) => TanggalFormatter.isToday(t.waktu)).toList();
+            filteredList = list
+                .where((t) => TanggalFormatter.isToday(t.waktu, idTransaksi: t.idTransaksi))
+                .toList();
           }
           // Hanya menampilkan transaksi yang sudah selesai atau dibatalkan (bukan transaksi berjalan / PENDING)
           final nonPending = filteredList.where((t) => !t.isPending).toList();
@@ -108,10 +138,11 @@ class _PenjualanTabState extends State<PenjualanTab> with WidgetsBindingObserver
     }).toList();
   }
 
-  /// Kunci tanggal lokal (`2026-09-21`) dari waktu ISO server, supaya
-  /// pengelompokan bill sejalan dengan jam yang ditampilkan ke pengguna.
-  String _dateKeyLokal(String waktu) {
-    final dt = TanggalFormatter.parse(waktu);
+  /// Kunci tanggal lokal (`2026-09-21`) dari waktu ISO server atau kode transaksi,
+  /// supaya pengelompokan bill sejalan dengan jam yang ditampilkan ke pengguna.
+  String _dateKeyLokal(String waktu, [String? idTransaksi]) {
+    final dt = TanggalFormatter.parseLokal(waktu, idTransaksi: idTransaksi) ??
+        TanggalFormatter.parse(waktu);
     if (dt == null) {
       final raw = waktu.trim();
       return raw.length >= 10 ? raw.substring(0, 10) : raw;
@@ -122,15 +153,20 @@ class _PenjualanTabState extends State<PenjualanTab> with WidgetsBindingObserver
   Map<String, List<TransactionGroup>> get _groupedTransactions {
     final Map<String, List<TransactionGroup>> map = {};
     for (final g in _filteredTransactions) {
-      final dateKey = _dateKeyLokal(g.waktu);
+      final dateKey = _dateKeyLokal(g.waktu, g.idTransaksi);
       map.putIfAbsent(dateKey, () => []).add(g);
     }
     for (final key in map.keys) {
       map[key]!.sort((a, b) {
         try {
-          final dtA = DateTime.parse(a.waktu);
-          final dtB = DateTime.parse(b.waktu);
-          return dtB.compareTo(dtA);
+          final dtA = TanggalFormatter.parseLokal(a.waktu, idTransaksi: a.idTransaksi);
+          final dtB = TanggalFormatter.parseLokal(b.waktu, idTransaksi: b.idTransaksi);
+          if (dtA != null && dtB != null) {
+            return dtB.compareTo(dtA);
+          }
+          final pA = DateTime.parse(a.waktu);
+          final pB = DateTime.parse(b.waktu);
+          return pB.compareTo(pA);
         } catch (_) {
           return 0;
         }
@@ -158,6 +194,18 @@ class _PenjualanTabState extends State<PenjualanTab> with WidgetsBindingObserver
   }
 
   Future<bool> _handleDeleteTransaction(TransactionGroup group) async {
+    if (!_canDelete) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Hanya Owner yang diizinkan menghapus transaksi'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return false;
+    }
+
     final displayName = group.customerName.isNotEmpty && group.customerName != '-'
         ? group.customerName
         : group.idTransaksi;
@@ -232,9 +280,9 @@ class _PenjualanTabState extends State<PenjualanTab> with WidgetsBindingObserver
     DetailTransaksiDialog.show(
       context: context,
       group: group,
-      cancelText: widget.canAddTransaction ? 'Batalkan' : 'Hapus Transaksi',
+      cancelText: 'Hapus Transaksi',
       onPrintAgain: () => _handlePrintAgain(group),
-      onCancel: () => _handleDeleteTransaction(group),
+      onCancel: _canDelete ? () => _handleDeleteTransaction(group) : null,
     );
   }
 
@@ -513,7 +561,7 @@ class _PenjualanTabState extends State<PenjualanTab> with WidgetsBindingObserver
                               group: group,
                               isCompact: true,
                               onTap: () => _showDetailTransaction(group),
-                              onDelete: () => _handleDeleteTransaction(group),
+                              onDelete: _canDelete ? () => _handleDeleteTransaction(group) : null,
                             );
                           }),
                           const SizedBox(height: 6),

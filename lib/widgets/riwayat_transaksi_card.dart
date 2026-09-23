@@ -25,8 +25,8 @@ class RiwayatTransaksiCard extends StatelessWidget {
 
   /// Waktu transaksi dalam zona waktu perangkat (`21 Sep 2026, 12:16`).
   /// Nilai mentah dipakai kembali bila format waktu tidak dikenali.
-  String _formatWaktuSingkat(String raw) {
-    final lokal = TanggalFormatter.tanggalJam(raw);
+  String _formatWaktuSingkat(String raw, [String? idTransaksi]) {
+    final lokal = TanggalFormatter.tanggalJam(raw, idTransaksi: idTransaksi);
     return lokal.isNotEmpty ? lokal : raw;
   }
 
@@ -94,7 +94,7 @@ class RiwayatTransaksiCard extends StatelessWidget {
 
     final totalItem = effectiveGroup.totalQuantity;
     final itemSummary = effectiveGroup.items.map((i) => i.namaItem).join(', ');
-    final subtitleText = '${_formatWaktuSingkat(effectiveGroup.waktu)} · $totalItem item · $itemSummary';
+    final subtitleText = '${_formatWaktuSingkat(effectiveGroup.waktu, effectiveGroup.idTransaksi)} · $totalItem item · $itemSummary';
 
     return AppCard(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),

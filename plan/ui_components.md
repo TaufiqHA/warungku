@@ -29,6 +29,7 @@ Dokumen ini berfungsi sebagai katalog sentral untuk seluruh elemen dan komponen 
 | :--- | :--- | :--- | :--- | :--- |
 | `AppButton` | `lib/widgets/app_button.dart` | Tombol aksi primer/sekunder dengan loading state dan kustomisasi warna | `text`, `onPressed`, `isLoading`, `isPrimary`, `icon`, `backgroundColor`, `foregroundColor`, `disabledBackgroundColor` | Login, Kasir, Pengaturan, Form, Transaksi Penjualan |
 | `AppTextField` | `lib/widgets/app_text_field.dart` | Input teks seragam dengan border melengkung halus dan fleksibilitas label | `label`, `controller`, `hintText`, `readOnly`, `showLabelAbove`, `keyboardType`, `obscureText`, `prefixIcon`, `suffixIcon`, `validator`, `inputFormatters` | Login, Form Barang, Form Pengguna, Form Biaya, Transaksi Penjualan |
+| `AppDropdownField` | `lib/widgets/app_dropdown_field.dart` | Input pilihan dropdown form seragam dengan styling identik AppTextField (border radius 10, content padding 14x12, outlineVariant, label di atas field) | `label`, `value`, `items`, `onChanged`, `validator`, `hintText`, `showLabelAbove`, `prefixIcon`, `enabled` | Form Tambah/Ubah Menu (BarangTab) |
 | `AppCard` | `lib/widgets/app_card.dart` | Kartu kontainer minimalis dengan border tipis dan elevasi rendah | `child`, `padding`, `margin`, `backgroundColor`, `borderRadius`, `elevation` | Login, Dashboard, Ringkasan Transaksi, Buat Pesanan |
 | `AppSliverCard` | `lib/widgets/app_sliver_card.dart` | Versi sliver dari `AppCard` (`DecoratedSliver`) untuk kartu berisi daftar panjang agar barisnya dibangun lazy saat digulir, bukan `shrinkWrap` | `sliver`, `innerPadding`, `outerPadding`, `backgroundColor`, `borderRadius` | LabaRugiTab (Rincian Harian, Rincian Pengeluaran, Daftar Transaksi Per Struk, Menu Terlaris) |
 | `AppBadge` | `lib/widgets/app_badge.dart` | Badge status (pesanan/transaksi) dan badge role hak akses | `text`, `backgroundColor`, `textColor`, `icon`, `factory role()`, `factory status()` | Dashboard, Tab Penjualan, Profil |
@@ -66,6 +67,22 @@ Dokumen ini berfungsi sebagai katalog sentral untuk seluruh elemen dan komponen 
 ---
 
 ## 3. Log Pembuatan & Perubahan Komponen
+
+- `2026-09-23`: **Pembatasan Hak Akses Hapus Transaksi (Hanya Khusus Role Owner)** (`lib/screens/dashboard/tabs/penjualan_tab.dart`, `lib/screens/dashboard/admin_toko_dashboard_screen.dart`, `lib/screens/dashboard/owner_dashboard_screen.dart`). Sesuai spesifikasi `plan/api.md` (DELETE `/transactions/{id}` khusus Owner) dan permintaan pembatasan hak akses:
+  1. `PenjualanTab` menambahkan properti `canDeleteTransaction` dan `testUser` serta getter `_canDelete` yang memastikan hanya pengguna dengan wewenang `OWNER` yang dapat memicu penghapusan transaksi.
+  2. Untuk `ADMIN_TOKO`: gesture swipe-to-delete pada kartu `RiwayatTransaksiCard` dinonaktifkan (`onDelete: null`), tombol destructive "Batalkan/Hapus Transaksi" pada modal `DetailTransaksiDialog` disembunyikan (`onCancel: null`), dan guard penolakan dipasang pada `_handleDeleteTransaction`.
+  3. `AdminTokoDashboardScreen` secara eksplisit memasang `canDeleteTransaction: false`, sedangkan `OwnerDashboardScreen` memasang `canDeleteTransaction: true`.
+
+- `2026-09-23`: **Dropdown Pemilihan Kategori Form Menu & Komponen AppDropdownField** (`lib/widgets/app_dropdown_field.dart` & `lib/screens/dashboard/tabs/barang_tab.dart`). Mengubah input teks biasa kategori pada modal "Tambah Menu" dan "Ubah Menu" menjadi dropdown:
+  1. Dibuat komponen `AppDropdownField<T>` berbasis `DropdownButtonFormField` dengan styling seragam dengan `AppTextField` (border radius 10, outlineVariant, focused primary, background surface).
+  2. Modal Tambah & Ubah Menu di `BarangTab` menyediakan dropdown kategori dari daftar kategori produk yang ada di warung (`_availableCategories`).
+  3. Menyediakan opsi aksi `'Tambah Kategori Baru...'` di dalam dropdown yang secara dinamis memunculkan field input nama kategori baru di bawahnya bila dipilih, dan otomatis ditambahkan ke daftar kategori custom warung.
+
+- `2026-09-23`: **Perbaikan Presisi Waktu Transaksi & Ekstraksi Stempel Kode TRX** (`lib/core/utils/tanggal_formatter.dart`, `lib/screens/dashboard/tabs/penjualan_tab.dart`, `lib/widgets/riwayat_transaksi_card.dart`, `lib/widgets/detail_transaksi_dialog.dart`, `lib/widgets/orderan_aktif_card.dart`). Memperbaiki ketidaksesuaian jam transaksi di tab Penjualan yang sebelumnya menampilkan jam UTC server (misal `11:47` alih-alih `18:47`):
+  1. `TanggalFormatter.parseLokal`: mengekstraksi tanggal dan jam presisi langsung dari nomor transaksi POS (`TRX-YYYYMMDDHHmmss` seperti `TRX-20260922184736`), serta menyediakan fallback zona waktu WIB (+7 jam) bila sistem Android gagal mendeteksi zona perangkat dan melaporkan UTC (+0).
+  2. `RiwayatTransaksiCard`, `DetailTransaksiDialog`, dan `OrderanAktifCard`: meneruskan `idTransaksi` ke `TanggalFormatter.tanggalJam` dan `jamMenit` sehingga subtitle kartu dan dialog menampilkan jam transaksi kasir lokal yang akurat.
+  3. `PenjualanTab`: pengelompokan tanggal (`_dateKeyLokal`) dan pengurutan bill memanfaatkan `parseLokal` dengan `idTransaksi` agar batas tanggal dan urutan transaksi konsisten dengan jam lokal yang ditampilkan.
+  4. `TransactionService`: pembuatan order baru menghasilkan nomor transaksi berformat `TRX-YYYYMMDDHHmmss` yang seragam dengan sistem kasir POS.
 
 - `2026-09-22`: **Sinkronisasi Orderan Aktif (Open Bill) & Waktu Lokal Kartu Penjualan** (`lib/screens/dashboard/tabs/beranda_tab.dart`, `lib/screens/dashboard/owner_dashboard_screen.dart`, `lib/screens/dashboard/admin_toko_dashboard_screen.dart`, `lib/screens/dashboard/tabs/penjualan_tab.dart`, `lib/widgets/riwayat_transaksi_card.dart`). Memperbaiki bill yang sudah dilunasi tapi masih tampil di kartu Orderan Aktif:
   1. `BerandaTab` menerima parameter `isActive` serta `transactionService`/`productService` (seam uji). Daftar Orderan Aktif disegarkan senyap (tanpa spinner penuh) saat tab Beranda kembali aktif dan saat aplikasi kembali ke foreground (`WidgetsBindingObserver`), sehingga bill yang dilunasi dari sesi/perangkat lain tidak tertinggal di layar.

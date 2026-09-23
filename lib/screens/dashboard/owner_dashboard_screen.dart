@@ -133,6 +133,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
           _visitedTabs.contains(2)
               ? PenjualanTab(
                   canAddTransaction: false,
+                  canDeleteTransaction: true,
                   initialFilter: 'Minggu Ini',
                   isActive: _currentIndex == 2,
                 )

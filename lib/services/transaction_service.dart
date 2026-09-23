@@ -107,7 +107,14 @@ class TransactionService {
       final headers = await _authHeaders();
       final user = await TokenManager.getUser();
       final now = DateTime.now();
-      final trxId = 'TRX-${now.millisecondsSinceEpoch}';
+      final datePart =
+          '${now.year.toString().padLeft(4, '0')}'
+          '${now.month.toString().padLeft(2, '0')}'
+          '${now.day.toString().padLeft(2, '0')}'
+          '${now.hour.toString().padLeft(2, '0')}'
+          '${now.minute.toString().padLeft(2, '0')}'
+          '${now.second.toString().padLeft(2, '0')}';
+      final trxId = 'TRX-$datePart';
       final normalizedPayment = _normalizePaymentMethod(paymentMethod);
 
       final payload = {
@@ -170,7 +177,14 @@ class TransactionService {
       final headers = await _authHeaders();
       final user = await TokenManager.getUser();
       final now = DateTime.now();
-      final trxId = 'TRX-${now.millisecondsSinceEpoch}';
+      final datePart =
+          '${now.year.toString().padLeft(4, '0')}'
+          '${now.month.toString().padLeft(2, '0')}'
+          '${now.day.toString().padLeft(2, '0')}'
+          '${now.hour.toString().padLeft(2, '0')}'
+          '${now.minute.toString().padLeft(2, '0')}'
+          '${now.second.toString().padLeft(2, '0')}';
+      final trxId = 'TRX-$datePart';
       final normalizedPayment = _normalizePaymentMethod(paymentMethod);
 
       final totalQty = items.fold<int>(0, (sum, item) => sum + item.quantity);

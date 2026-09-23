@@ -6,6 +6,7 @@ import '../../../widgets/app_badge.dart';
 import '../../../widgets/app_button.dart';
 import '../../../widgets/app_card.dart';
 import '../../../widgets/app_dialog.dart';
+import '../../../widgets/app_dropdown_field.dart';
 import '../../../widgets/app_text_field.dart';
 
 class BarangTab extends StatefulWidget {
@@ -64,6 +65,32 @@ class _BarangTabState extends State<BarangTab> {
     return set.toList();
   }
 
+  List<String> get _availableCategories {
+    final set = <String>{};
+    for (final p in _products) {
+      final c = p.category.trim();
+      if (c.isNotEmpty && c.toLowerCase() != 'semua') {
+        set.add(c);
+      }
+    }
+    for (final c in _customCategories) {
+      final trimmed = c.trim();
+      if (trimmed.isNotEmpty && trimmed.toLowerCase() != 'semua') {
+        set.add(trimmed);
+      }
+    }
+    if (set.isEmpty) {
+      set.addAll(['Makanan', 'Minuman', 'Lainnya']);
+    } else {
+      for (final defaultCat in ['Makanan', 'Minuman', 'Lainnya']) {
+        if (!set.any((item) => item.toLowerCase() == defaultCat.toLowerCase())) {
+          set.add(defaultCat);
+        }
+      }
+    }
+    return set.toList();
+  }
+
   List<ProductModel> get _filteredProducts {
     final query = _searchController.text.trim().toLowerCase();
     return _products.where((p) {
@@ -92,91 +119,159 @@ class _BarangTabState extends State<BarangTab> {
     final priceController = TextEditingController(
       text: product != null ? AngkaRibuan.format(product.price) : '',
     );
-    final categoryController = TextEditingController(text: product?.category ?? 'Makanan');
+    final newCategoryController = TextEditingController();
+    const newCategoryOption = '_NEW_CATEGORY_';
+
+    final categoriesList = List<String>.from(_availableCategories);
+    if (product != null &&
+        product.category.trim().isNotEmpty &&
+        !categoriesList.any((c) => c.toLowerCase() == product.category.trim().toLowerCase())) {
+      categoriesList.add(product.category.trim());
+    }
+
+    String selectedCategory = product != null && product.category.trim().isNotEmpty
+        ? categoriesList.firstWhere(
+            (c) => c.toLowerCase() == product.category.trim().toLowerCase(),
+            orElse: () => product.category.trim(),
+          )
+        : (_selectedCategory != 'Semua' &&
+                categoriesList.any((c) => c.toLowerCase() == _selectedCategory.toLowerCase())
+            ? categoriesList.firstWhere((c) => c.toLowerCase() == _selectedCategory.toLowerCase())
+            : (categoriesList.isNotEmpty ? categoriesList.first : 'Makanan'));
 
     showDialog(
       context: context,
       useRootNavigator: true,
       builder: (ctx) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          title: Text(
-            isEdit ? 'Ubah Menu' : 'Tambah Menu',
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-          ),
-          content: SingleChildScrollView(
-            child: Form(
-              key: formKey,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  AppTextField(
-                    label: 'Nama Menu',
-                    controller: nameController,
-                    validator: (v) => v == null || v.trim().isEmpty ? 'Nama wajib diisi' : null,
-                  ),
-                  const SizedBox(height: 12),
-                  AppTextField(
-                    label: 'Harga (Rp)',
-                    controller: priceController,
-                    keyboardType: TextInputType.number,
-                    hintText: '15.000',
-                    inputFormatters: const [RibuanInputFormatter()],
-                    validator: (v) {
-                      if (v == null || v.trim().isEmpty) return 'Harga wajib diisi';
-                      final nominal = AngkaRibuan.parse(v);
-                      if (nominal == null) return 'Harus berupa angka';
-                      if (nominal <= 0) return 'Harga harus lebih dari 0';
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  AppTextField(
-                    label: 'Kategori',
-                    controller: categoryController,
-                    validator: (v) => v == null || v.trim().isEmpty ? 'Kategori wajib diisi' : null,
-                  ),
-                ],
+        return StatefulBuilder(
+          builder: (dialogCtx, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              title: Text(
+                isEdit ? 'Ubah Menu' : 'Tambah Menu',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
-            ),
-          ),
-          actions: [
-            Row(
-              children: [
-                Expanded(
-                  child: AppButton(
-                    text: 'Batal',
-                    isPrimary: false,
-                    height: 38,
-                    onPressed: () => Navigator.of(ctx).pop(),
+              content: SingleChildScrollView(
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      AppTextField(
+                        label: 'Nama Menu',
+                        controller: nameController,
+                        validator: (v) => v == null || v.trim().isEmpty ? 'Nama wajib diisi' : null,
+                      ),
+                      const SizedBox(height: 12),
+                      AppTextField(
+                        label: 'Harga (Rp)',
+                        controller: priceController,
+                        keyboardType: TextInputType.number,
+                        hintText: '15.000',
+                        inputFormatters: const [RibuanInputFormatter()],
+                        validator: (v) {
+                          if (v == null || v.trim().isEmpty) return 'Harga wajib diisi';
+                          final nominal = AngkaRibuan.parse(v);
+                          if (nominal == null) return 'Harus berupa angka';
+                          if (nominal <= 0) return 'Harga harus lebih dari 0';
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      AppDropdownField<String>(
+                        label: 'Kategori',
+                        value: selectedCategory,
+                        items: [
+                          ...categoriesList.map((cat) => DropdownMenuItem<String>(
+                                value: cat,
+                                child: Text(cat),
+                              )),
+                          const DropdownMenuItem<String>(
+                            value: newCategoryOption,
+                            child: Row(
+                              children: [
+                                Icon(Icons.add_rounded, size: 18),
+                                SizedBox(width: 6),
+                                Text('Tambah Kategori Baru...'),
+                              ],
+                            ),
+                          ),
+                        ],
+                        onChanged: (val) {
+                          if (val != null) {
+                            setDialogState(() {
+                              selectedCategory = val;
+                            });
+                          }
+                        },
+                        validator: (v) => v == null || v.trim().isEmpty ? 'Kategori wajib diisi' : null,
+                      ),
+                      if (selectedCategory == newCategoryOption) ...[
+                        const SizedBox(height: 12),
+                        AppTextField(
+                          label: 'Nama Kategori Baru',
+                          controller: newCategoryController,
+                          hintText: 'Misal: Paket Hemat',
+                          validator: (v) {
+                            if (selectedCategory == newCategoryOption) {
+                              if (v == null || v.trim().isEmpty) return 'Kategori baru wajib diisi';
+                              if (v.trim().toLowerCase() == 'semua') return 'Nama kategori tidak valid';
+                            }
+                            return null;
+                          },
+                        ),
+                      ],
+                    ],
                   ),
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: AppButton(
-                    text: isEdit ? 'Simpan' : 'Tambah',
-                    height: 38,
-                    onPressed: () async {
-                      if (!formKey.currentState!.validate()) return;
-                      final price = AngkaRibuan.parse(priceController.text) ?? 0;
-                      Navigator.of(ctx).pop();
+              ),
+              actions: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: AppButton(
+                        text: 'Batal',
+                        isPrimary: false,
+                        height: 38,
+                        onPressed: () => Navigator.of(ctx).pop(),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: AppButton(
+                        text: isEdit ? 'Simpan' : 'Tambah',
+                        height: 38,
+                        onPressed: () async {
+                          if (!formKey.currentState!.validate()) return;
+                          final price = AngkaRibuan.parse(priceController.text) ?? 0;
+                          final finalCategory = selectedCategory == newCategoryOption
+                              ? newCategoryController.text.trim()
+                              : selectedCategory;
+                          Navigator.of(ctx).pop();
 
-                      try {
-                        if (isEdit) {
-                          await _productService.updateProduct(
-                            id: product.id,
-                            name: nameController.text,
-                            price: price,
-                            category: categoryController.text,
-                          );
-                        } else {
-                          await _productService.addProduct(
-                            name: nameController.text,
-                            price: price,
-                            category: categoryController.text,
-                          );
-                        }
-                        _loadProducts();
+                          if (selectedCategory == newCategoryOption &&
+                              !_customCategories.any((c) => c.toLowerCase() == finalCategory.toLowerCase())) {
+                            setState(() {
+                              _customCategories.add(finalCategory);
+                            });
+                          }
+
+                          try {
+                            if (isEdit) {
+                              await _productService.updateProduct(
+                                id: product.id,
+                                name: nameController.text,
+                                price: price,
+                                category: finalCategory,
+                              );
+                            } else {
+                              await _productService.addProduct(
+                                name: nameController.text,
+                                price: price,
+                                category: finalCategory,
+                              );
+                            }
+                            _loadProducts();
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
@@ -204,6 +299,8 @@ class _BarangTabState extends State<BarangTab> {
         );
       },
     );
+  },
+);
   }
 
   void _handleDelete(ProductModel product) async {

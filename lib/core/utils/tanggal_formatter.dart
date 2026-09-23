@@ -113,43 +113,69 @@ class TanggalFormatter {
     return DateTime(year, month, day);
   }
 
-  /// `14:08` — jam lokal (HH:mm) dari string waktu ISO server.
+  /// Membaca string waktu server atau kode transaksi menjadi `DateTime` lokal.
+  ///
+  /// Bila [idTransaksi] memuat pola 14-digit tanggal-jam POS (`TRX-20260922184736`),
+  /// waktu lokal tersebut diprioritaskan agar presisi dengan jam kasir.
+  /// Bila [value] berupa ISO UTC (`Z`) dan zona sistem dilaporkan UTC 0
+  /// (isu deteksi libc Android), otomatis diterapkan fallback zona WIB (+7)
+  /// agar jam tidak tertinggal 7 jam dari stempel transaksi.
+  static DateTime? parseLokal(String? value, {String? idTransaksi}) {
+    if (idTransaksi != null && idTransaksi.trim().isNotEmpty) {
+      final match = RegExp(r'TRX-(\d{4})(\d{2})(\d{2})[-_]?(\d{2})(\d{2})(\d{2})')
+          .firstMatch(idTransaksi.trim());
+      if (match != null) {
+        final y = int.tryParse(match.group(1)!);
+        final m = int.tryParse(match.group(2)!);
+        final d = int.tryParse(match.group(3)!);
+        final h = int.tryParse(match.group(4)!);
+        final min = int.tryParse(match.group(5)!);
+        final s = int.tryParse(match.group(6)!);
+        if (y != null && m != null && d != null && h != null && min != null && s != null) {
+          return DateTime(y, m, d, h, min, s);
+        }
+      }
+    }
+
+    if (value == null || value.trim().isEmpty) return null;
+    final dt = DateTime.tryParse(value.trim());
+    if (dt == null) return null;
+    if (dt.isUtc) {
+      if (DateTime.now().timeZoneOffset != Duration.zero) {
+        return dt.toLocal();
+      }
+      return dt.add(const Duration(hours: 7));
+    }
+    return dt;
+  }
+
+  /// `14:08` — jam lokal (HH:mm) dari string waktu ISO server atau kode transaksi.
   ///
   /// Mengembalikan string kosong bila nilai tidak memuat komponen jam
   /// (misalnya tanggal tampilan `18 Sep 2026`) sehingga pemanggil dapat
   /// menyembunyikan barisnya.
-  static String jamMenit(String? value) {
-    final local = _waktuLokal(value);
+  static String jamMenit(String? value, {String? idTransaksi}) {
+    final local = parseLokal(value, idTransaksi: idTransaksi);
     if (local == null) return '';
     return '${local.hour.toString().padLeft(2, '0')}:'
         '${local.minute.toString().padLeft(2, '0')}';
   }
 
-  /// `20 Sep 2026, 09:00` — tanggal dan jam lokal dari string waktu ISO server.
+  /// `20 Sep 2026, 09:00` — tanggal dan jam lokal dari string waktu ISO server atau kode transaksi.
   ///
   /// Kosong bila nilai tidak dapat dibaca sebagai waktu.
-  static String tanggalJam(String? value) {
-    final local = _waktuLokal(value);
+  static String tanggalJam(String? value, {String? idTransaksi}) {
+    final local = parseLokal(value, idTransaksi: idTransaksi);
     if (local == null) return '';
-    return '${singkat(local)}, ${jamMenit(value)}';
-  }
-
-  /// Membaca string waktu server menjadi `DateTime` lokal.
-  /// Mengembalikan null bila tidak dapat di-parse atau tidak punya komponen jam.
-  static DateTime? _waktuLokal(String? value) {
-    if (value == null || value.trim().isEmpty) return null;
-    final dt = DateTime.tryParse(value.trim());
-    if (dt == null) return null;
-    return dt.isUtc ? dt.toLocal() : dt;
+    return '${singkat(local)}, ${jamMenit(value, idTransaksi: idTransaksi)}';
   }
 
   /// Mengecek apakah tanggal dari server sama dengan tanggal hari ini pada zona waktu lokal.
-  static bool isToday(String? value) {
-    if (value == null || value.trim().isEmpty) return false;
-    final dt = parse(value);
-    if (dt == null) return false;
-    final localDt = dt.isUtc ? dt.toLocal() : dt;
+  static bool isToday(String? value, {String? idTransaksi}) {
+    if ((value == null || value.trim().isEmpty) && idTransaksi == null) return false;
+    final local = parseLokal(value, idTransaksi: idTransaksi) ?? parse(value);
+    if (local == null) return false;
     final now = DateTime.now();
-    return localDt.year == now.year && localDt.month == now.month && localDt.day == now.day;
+    return local.year == now.year && local.month == now.month && local.day == now.day;
   }
 }

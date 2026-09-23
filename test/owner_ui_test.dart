@@ -296,7 +296,7 @@ void main() {
 
   testWidgets('RiwayatTransaksiCard compact menampilkan avatar receipt, rincian waktu & item, badge bayar, dan panah detail', (WidgetTester tester) async {
     final group = TransactionGroup(
-      idTransaksi: 'TRX-20260919132251',
+      idTransaksi: 'TRX-OWNER-COMPACT-01',
       customerName: 'Kak Jimmy',
       waktu: '2026-09-19T13:22:51Z',
       dicatatOleh: 'Admin Toko',
@@ -304,7 +304,7 @@ void main() {
       orderStatus: 'COMPLETED',
       items: const [
         TransactionModel(
-          idTransaksi: 'TRX-20260919132251',
+          idTransaksi: 'TRX-OWNER-COMPACT-01',
           id: '1',
           namaItem: 'Ayam Geprek Sambal Korek',
           jumlah: 2,
@@ -329,7 +329,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('Kak Jimmy'), findsOneWidget);
-    expect(find.text('TRX-20260919132251'), findsOneWidget);
+    expect(find.text('TRX-OWNER-COMPACT-01'), findsOneWidget);
     expect(
       find.textContaining(waktuLokalLengkap('2026-09-19T13:22:51Z')),
       findsOneWidget,

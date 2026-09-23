@@ -2114,6 +2114,22 @@ void main() {
     expect(TanggalFormatter.jamMenit('2026-09-20T01:00:00Z'),
         waktuLokalLengkap('2026-09-20T01:00:00Z').split(', ').last);
 
+    // Nomor transaksi berpola 14-digit tanggal-jam (TRX-YYYYMMDDHHmmss) diprioritaskan
+    expect(
+      TanggalFormatter.tanggalJam(
+        '2026-09-22T11:47:47.000000Z',
+        idTransaksi: 'TRX-20260922184736',
+      ),
+      '22 Sep 2026, 18:47',
+    );
+    expect(
+      TanggalFormatter.jamMenit(
+        '2026-09-22T11:47:47.000000Z',
+        idTransaksi: 'TRX-20260922184736',
+      ),
+      '18:47',
+    );
+
     // Format tanggal tampilan tanpa jam tidak menghasilkan baris waktu.
     expect(TanggalFormatter.jamMenit('20 Sep 2026'), '');
     expect(TanggalFormatter.tanggalJam('20 Sep 2026'), '');
@@ -2121,6 +2137,40 @@ void main() {
     expect(TanggalFormatter.tanggalJam(''), '');
     expect(TanggalFormatter.jamMenit(null), '');
     expect(TanggalFormatter.tanggalJam(null), '');
+  });
+
+  testWidgets('RiwayatTransaksiCard menampilkan waktu lokal presisi dari kode transaksi TRX-YYYYMMDDHHmmss', (WidgetTester tester) async {
+    const trx = TransactionModel(
+      idTransaksi: 'TRX-20260922184736',
+      id: 'PRD-057',
+      namaItem: 'Es Timun Serut',
+      jumlah: 1,
+      harga: 15000,
+      waktu: '2026-09-22T11:47:47.000000Z',
+      dicatatOleh: 'Admin',
+      catatan: '',
+      paymentMethod: 'CASH',
+      orderStatus: 'COMPLETED',
+      customerName: 'Rizky',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: RiwayatTransaksiCard(
+            trx: trx,
+            isCompact: true,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    // Pastikan subtitle menampilkan jam lokal 18:47, bukan jam UTC mentah 11:47
+    expect(find.text('TRX-20260922184736'), findsOneWidget);
+    expect(find.text('Rizky'), findsOneWidget);
+    expect(find.textContaining('22 Sep 2026, 18:47'), findsOneWidget);
+    expect(find.textContaining('11:47'), findsNothing);
   });
 
   testWidgets('OrderanAktifCard menampilkan nama, nomor, lalu waktu transaksi dan bisa dibuka-tutup', (WidgetTester tester) async {

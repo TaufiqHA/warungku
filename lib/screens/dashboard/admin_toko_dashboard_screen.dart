@@ -159,6 +159,7 @@ class _AdminTokoDashboardScreenState extends State<AdminTokoDashboardScreen> {
       ),
       PenjualanTab(
         isActive: _currentIndex == 1,
+        canDeleteTransaction: false,
       ),
       const BarangTab(),
       ProfilTab(

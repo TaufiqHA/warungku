@@ -3,7 +3,7 @@
 Aplikasi Flutter manajemen warung / POS, **Android-only**. UI dan komentar berbahasa Indonesia.
 
 ## Prinsip kerja (wajib)
-1. **Planning first** — sebelum mengedit kode, tampilkan rencana singkat: Tujuan, Analisis, Langkah, Verifikasi. Klarifikasi dulu jika ambigu/berisiko.
+1. **Planning first** — sebelum mengeksekusi perubahan kode atau aksi pada setiap prompt, susun rencana kerja terlebih dahulu (tujuan, analisis dampak/file terkait, langkah kerja, verifikasi). Klarifikasi terlebih dahulu jika ada instruksi yang ambigu atau berisiko tinggi.
 2. **Reusable UI** — periksa `plan/ui_components.md` sebelum membuat elemen UI baru; taruh komponen bersama di `lib/widgets/`; catat komponen baru/perubahan ke registry tersebut.
 3. **UI minimalis** — label singkat, tanpa teks filler/tagline dekoratif.
 4. **Referensi spec** — rujuk `plan/screen.md` (alur/UX & role) dan `plan/api.md` (kontrak endpoint) saat membuat atau mengubah layar dan integrasi API.

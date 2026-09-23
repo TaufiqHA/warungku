@@ -5,13 +5,13 @@ Semua agen kecerdasan buatan (AI Agents / Antigravity / Gemini) yang bekerja di 
 ---
 
 ## 1. Planning First (Perencanaan Sebelum Eksekusi)
-- **Wajib Planning di Setiap Prompt**: Setiap kali menerima instruksi, prompt, atau tugas baru dari pengguna, agen **TIDAK BOLEH** langsung mengedit kode secara tiba-tiba tanpa pemikiran terstruktur. Agen harus terlebih dahulu menyusun dan menampilkan rencana (planning) yang jelas.
-- **Format Rencana**:
-  1. **Tujuan**: Apa yang ingin dicapai pada tugas saat ini.
-  2. **Analisis**: File yang terpengaruh, dependensi, dan arsitektur yang relevan.
-  3. **Langkah Kerja (Step-by-Step)**: Urutan aksi yang akan dilakukan secara spesifik.
-  4. **Verifikasi**: Cara memastikan hasil kerja berjalan baik dan bebas error.
-- Jika ada hal yang kurang jelas atau rancu, tanyakan/klarifikasi kepada pengguna sebelum mengeksekusi langkah berisiko tinggi.
+- **Wajib Planning di Setiap Prompt**: Setiap kali menerima instruksi, prompt, atau tugas baru dari pengguna, agen **WAJIB** menyusun rencana kerja (planning) terlebih dahulu sebelum melakukan modifikasi file atau mengeksekusi perubahan kode.
+- **Format / Elemen Rencana**:
+  1. **Tujuan**: Sasaran yang ingin dicapai dari prompt.
+  2. **Analisis**: Identifikasi akar masalah, file-file yang terpengaruh, dependensi, arsitektur, dan referensi spec terkait (`plan/screen.md`, `plan/api.md`, `plan/ui_components.md`).
+  3. **Langkah Kerja**: Urutan aksi dan perubahan yang terstruktur dan terukur.
+  4. **Verifikasi**: Rencana pengujian dan validasi (misal: `flutter analyze`, `flutter test`).
+- **Klarifikasi Jika Perlu**: Jika terdapat instruksi yang ambigu atau berisiko tinggi, mintalah klarifikasi kepada pengguna sebelum mengeksekusi tindakan.
 
 ---
 
