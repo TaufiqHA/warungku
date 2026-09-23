@@ -2782,6 +2782,160 @@ void main() {
     TransactionService.clearCache();
     ProductService.clearCache();
   });
+
+  testWidgets(
+      'RiwayatTransaksiCard compact dapat di-expand dan di-collapse dengan tap, menampilkan rincian item dan aksi',
+      (WidgetTester tester) async {
+    bool printTriggered = false;
+    bool detailTriggered = false;
+
+    final group = TransactionGroup(
+      idTransaksi: 'TRX-EXPAND-01',
+      customerName: 'Mas Danang',
+      waktu: '2026-09-23T14:30:00Z',
+      dicatatOleh: 'Kasir 1',
+      paymentMethod: 'CASH',
+      orderStatus: 'COMPLETED',
+      items: const [
+        TransactionModel(
+          idTransaksi: 'TRX-EXPAND-01',
+          id: '1',
+          namaItem: 'Sate Ayam Madura',
+          jumlah: 2,
+          harga: 25000,
+          waktu: '2026-09-23T14:30:00Z',
+          dicatatOleh: 'Kasir 1',
+          catatan: 'Bumbu kacang dipisah',
+          paymentMethod: 'CASH',
+          orderStatus: 'COMPLETED',
+          customerName: 'Mas Danang',
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: RiwayatTransaksiCard(
+            group: group,
+            isCompact: true,
+            onPrintAgain: () => printTriggered = true,
+            onDetail: () => detailTriggered = true,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    // 1. Kondisi awal (collapsed): rincian item & tombol aksi belum tampil
+    expect(find.text('Mas Danang'), findsOneWidget);
+    expect(find.text('TRX-EXPAND-01'), findsOneWidget);
+    expect(find.text('2x Sate Ayam Madura'), findsNothing);
+    expect(find.text('Catatan: Bumbu kacang dipisah'), findsNothing);
+    expect(find.text('Cetak Ulang'), findsNothing);
+    expect(find.text('Detail'), findsNothing);
+
+    // 2. Tap kartu untuk expand
+    await tester.tap(find.text('Mas Danang'));
+    await tester.pumpAndSettle();
+
+    // 3. Kondisi expanded: item, catatan, kasir, dan tombol aksi tampil
+    expect(find.text('2x Sate Ayam Madura'), findsOneWidget);
+    expect(find.text('Catatan: Bumbu kacang dipisah'), findsOneWidget);
+    expect(find.text('Kasir: Kasir 1'), findsOneWidget);
+    expect(find.text('Cetak Ulang'), findsOneWidget);
+    expect(find.text('Detail'), findsOneWidget);
+
+    // 4. Tombol Cetak Ulang dan Detail berfungsi
+    await tester.tap(find.text('Cetak Ulang'));
+    await tester.pump();
+    expect(printTriggered, true);
+
+    await tester.tap(find.text('Detail'));
+    await tester.pump();
+    expect(detailTriggered, true);
+
+    // 5. Tap lagi untuk collapse
+    await tester.tap(find.text('Mas Danang'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('2x Sate Ayam Madura'), findsNothing);
+    expect(find.text('Cetak Ulang'), findsNothing);
+  });
+
+  testWidgets(
+      'PenjualanTab kartu transaksi dapat di-expand secara inline saat di-tap oleh Admin Toko',
+      (WidgetTester tester) async {
+    TransactionService.clearCache();
+    await TokenManager.saveSession(token: 'mock_token', user: adminTokoUser);
+
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/transactions')) {
+        return http.Response(
+          jsonEncode({
+            'success': true,
+            'data': [
+              {
+                'idTransaksi': 'TRX-TAB-EXPAND-01',
+                'id': 'PRD-10',
+                'namaItem': 'Bebek Goreng Kremes',
+                'jumlah': 1,
+                'harga': 32000.0,
+                'waktu': DateTime.now().toIso8601String(),
+                'dicatatOleh': 'Admin Toko',
+                'catatan': 'Sambal banyak',
+                'payment_method': 'QRIS',
+                'orderStatus': 'COMPLETED',
+                'customerName': 'Mas Budi',
+                'servedQty': 1,
+              },
+            ],
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }
+      return http.Response('{"success": false}', 404);
+    });
+
+    final service = TransactionService(client: client);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PenjualanTab(
+            testUser: adminTokoUser,
+            transactionService: service,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // 1. Verifikasi kartu transaksi muncul dalam bentuk compact
+    expect(find.text('Mas Budi'), findsOneWidget);
+    expect(find.text('TRX-TAB-EXPAND-01'), findsOneWidget);
+    expect(find.text('1x Bebek Goreng Kremes'), findsNothing);
+    expect(find.text('Cetak Ulang'), findsNothing);
+
+    // 2. Tap kartu transaksi untuk expand inline
+    await tester.tap(find.text('Mas Budi'));
+    await tester.pumpAndSettle();
+
+    // 3. Verifikasi rincian transaksi tampil di kartu (bukan modal dialog)
+    expect(find.text('1x Bebek Goreng Kremes'), findsOneWidget);
+    expect(find.text('Catatan: Sambal banyak'), findsOneWidget);
+    expect(find.text('Kasir: Admin Toko'), findsOneWidget);
+    expect(find.text('Cetak Ulang'), findsOneWidget);
+    expect(find.text('Detail'), findsOneWidget);
+
+    // 4. Tap tombol Detail membuka modal DetailTransaksiDialog
+    await tester.tap(find.text('Detail'));
+    await tester.pumpAndSettle();
+    expect(find.text('Detail Transaksi'), findsOneWidget);
+
+    TransactionService.clearCache();
+  });
 }
 
 

@@ -86,13 +86,18 @@ void main() {
       // Dismissible (swipe-to-delete) tidak boleh ada untuk Admin Toko
       expect(find.byType(Dismissible), findsNothing);
 
-      // Ketuk kartu untuk membuka DetailTransaksiDialog
+      // Ketuk kartu untuk expand rincian di akun Admin Toko
       await tester.tap(find.text('Mas Budi'));
+      await tester.pumpAndSettle();
+
+      // Rincian tampil dan tombol Detail membuka modal
+      expect(find.text('Detail'), findsOneWidget);
+      await tester.tap(find.text('Detail'));
       await tester.pumpAndSettle();
 
       // Modal detail muncul
       expect(find.text('Detail Transaksi'), findsOneWidget);
-      expect(find.text('Cetak Ulang'), findsOneWidget);
+      expect(find.text('Cetak Ulang'), findsWidgets);
       expect(find.text('Tutup'), findsOneWidget);
 
       // Tombol Hapus / Batalkan tidak boleh ada
