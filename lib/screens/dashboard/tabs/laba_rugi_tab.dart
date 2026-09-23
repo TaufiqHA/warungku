@@ -4,7 +4,7 @@ import '../../../data/models/expense_model.dart';
 import '../../../data/models/transaction_group_model.dart';
 import '../../../data/models/transaction_model.dart';
 import '../../../services/expense_service.dart';
-import '../../../services/monthly_report_pdf_service.dart';
+import '../../../services/laba_rugi_pdf_service.dart';
 import '../../../services/transaction_service.dart';
 import '../../../widgets/app_card.dart';
 import '../../../widgets/app_sliver_card.dart';
@@ -222,6 +222,7 @@ class _LabaRugiTabState extends State<LabaRugiTab> {
   double _totalRevenue = 0;
   double _totalExpense = 0;
   List<TransactionGroup> _groups = [];
+  List<ExpenseModel> _rawExpenses = [];
   List<Map<String, dynamic>> _dailySales = [];
   List<Map<String, dynamic>> _expensesByDate = [];
   List<Map<String, dynamic>> _topSelling = [];
@@ -318,6 +319,7 @@ class _LabaRugiTabState extends State<LabaRugiTab> {
       if (!mounted || requestId != _requestId) return;
       setState(() {
         _groups = groups;
+        _rawExpenses = expList;
         _dailySales = _buildDailySales(groups);
         _expensesByDate = _buildExpensesByDate(expList);
         _topSelling = _buildTopSelling(trxList);
@@ -332,6 +334,7 @@ class _LabaRugiTabState extends State<LabaRugiTab> {
       if (mounted && requestId == _requestId) {
         setState(() {
           _groups = [];
+          _rawExpenses = [];
           _dailySales = [];
           _expensesByDate = [];
           _topSelling = [];
@@ -598,20 +601,19 @@ class _LabaRugiTabState extends State<LabaRugiTab> {
 
   Future<void> _handleExportPdf() async {
     try {
-      final now = DateTime.now();
-      await MonthlyReportPdfService.printMonthlyReport(
-        month: now.month,
-        year: now.year,
-        monthName: _bulanList[now.month - 1],
-        totalOrder: _groups.length,
-        totalOmzet: _totalRevenue,
-        averageOrderValue: _groups.isEmpty
-            ? 0.0
-            : _totalRevenue / _groups.length,
-        topSellingMenu: _topSelling,
-        dailyBreakdown: const {},
-        storeName: 'Warungku',
-        filteredItem: 'Semua Menu',
+      String filterTitle = _selectedFilter;
+      if (_selectedFilter == 'Pilih Tanggal' && _customDateRange != null) {
+        final start = _customDateRange!.start;
+        final end = _customDateRange!.end;
+        filterTitle = '${TanggalFormatter.singkat(start)} - ${TanggalFormatter.singkat(end)}';
+      }
+
+      await LabaRugiPdfService.printLabaRugiReport(
+        filterTitle: filterTitle,
+        totalRevenue: _totalRevenue,
+        totalExpense: _totalExpense,
+        groups: _groups,
+        expenses: _rawExpenses,
       );
     } catch (e) {
       if (mounted) {

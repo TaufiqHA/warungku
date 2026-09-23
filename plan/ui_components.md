@@ -47,6 +47,7 @@ Dokumen ini berfungsi sebagai katalog sentral untuk seluruh elemen dan komponen 
 | `PrinterSettingsDialog` | `lib/widgets/printer_settings_dialog.dart` | Modal konfigurasi printer thermal (Bluetooth paired devices & Jaringan IP/Port, Kertas 58/80mm, & Tes Cetak) | `show()` | AppBar Dashboard saat tab Profil aktif (Pojok kanan atas layar Profil) |
 | `MonthlyReportScreen` | `lib/screens/report/monthly_report_screen.dart` | Layar evaluasi kinerja bulanan khusus Owner (ringkasan pesanan/omzet/AOV, ranking menu terlaris, rekap harian, cetak laporan PDF) | `initialMonth`, `initialYear` | Navigasi dari LabaRugiTab dan BerandaTab Owner |
 | `MonthlyReportPdfService` | `lib/services/monthly_report_pdf_service.dart` | Service pembentukan dan pencetakan dokumen PDF laporan bulanan resmi A4 | `generateMonthlyReportBytes()`, `printMonthlyReport()` | Tombol print App Bar di `MonthlyReportScreen` |
+| `LabaRugiPdfService` | `lib/services/laba_rugi_pdf_service.dart` | Service pembentukan dan pencetakan dokumen PDF Laporan Ringkasan Laba-Rugi resmi A4 lengkap (tabel rekap pendapatan/beban/laba bersih, rincian transaksi penjualan per item, rincian pengeluaran, dan paginasi otomatis) | `generateLabaRugiPdfBytes()`, `printLabaRugiReport()`, `formatCurrency()`, `formatTanggalCetak()` | Tombol icon 'PDF' pada header Ringkasan Laba-Rugi di `LabaRugiTab` |
 | `QuickActionCard` | `lib/screens/dashboard/tabs/beranda_tab.dart` | Kartu navigasi cepat terdistribusi simetris penuh (Expanded untuk Admin Toko, responsive ConstrainedBox untuk Owner) | `_buildQuickAction(icon, label, onTap)` | BerandaTab (Admin Toko & Owner) |
 | `AturUrutanPdfDialog` | `lib/widgets/atur_urutan_pdf_dialog.dart` | Modal dialog interaktif atur urutan kategori/produk & edit nama kategori untuk ekspor katalog PDF | `onLayoutSaved`, `initialProducts`, `show()` | AppBar Dashboard pojok kanan atas saat Tab Manajemen Barang aktif (Admin Toko) |
 | `MenuCatalogPdfService` | `lib/services/menu_catalog_pdf_service.dart` | Service pembentukan dan pencetakan dokumen PDF katalog menu A4 2 kolom (Daftar Harga, Meja, format Rp XX K, kotak checklist) | `generateMenuCatalogBytes()`, `printMenuCatalog()`, `formatKPrice()` | Tombol 'Export PDF' pada `AturUrutanPdfDialog` |
@@ -67,6 +68,14 @@ Dokumen ini berfungsi sebagai katalog sentral untuk seluruh elemen dan komponen 
 ---
 
 ## 3. Log Pembuatan & Perubahan Komponen
+
+- `2026-09-23`: **Implementasi Dokumen Lengkap PDF Laporan Ringkasan Laba-Rugi Sesuai Format Referensi** (`lib/services/laba_rugi_pdf_service.dart`, `lib/screens/dashboard/tabs/laba_rugi_tab.dart`, `test/laba_rugi_pdf_test.dart`). Mengganti luaran cetak PDF pada tombol aksi Ringkasan Laba-Rugi di `LabaRugiTab` yang sebelumnya memicu format laporan bulanan (`MonthlyReportPdfService` dengan `dailyBreakdown: const {}`) menjadi format laporan lengkap resmi:
+  1. Dibuat service `LabaRugiPdfService` yang menyusun dokumen PDF A4 multi-halaman dengan judul `LAPORAN RINGKASAN LABA-RUGI`, subjudul `Periode/Filter`, serta stempel waktu `Tanggal Cetak` berbahasa Indonesia.
+  2. Tabel 3 baris ringkasan laba-rugi berbingkai penuh: `TOTAL PENDAPATAN (PENJUALAN)`, `TOTAL PENGELUARAN`, dan `LABA BERSIH` dengan format mata uang rupiah bertitik (`Rp. XX.XXX.XXX` atau `-Rp. XX.XXX.XXX` jika defisit).
+  3. Tabel `Rincian Transaksi Penjualan` berbingkai penuh memuat setiap item menu transaksi selesai terurut dari waktu terbaru (`No TRX`, `Waktu`, `Item`, `Qty`, `Jumlah`) dengan pengulangan header tabel otomatis antar halaman.
+  4. Seksi `Rincian Pengeluaran` otomatis disertakan di bawah tabel rincian transaksi bila terdapat beban pengeluaran pada periode yang dipilih.
+  5. `_handleExportPdf()` pada `LabaRugiTab` diperbarui untuk meneruskan judul periode, total pendapatan, total pengeluaran, daftar transaksi, dan pengeluaran ke `LabaRugiPdfService.printLabaRugiReport`.
+
 
 - `2026-09-23`: **Pembatasan Hak Akses Hapus Transaksi (Hanya Khusus Role Owner)** (`lib/screens/dashboard/tabs/penjualan_tab.dart`, `lib/screens/dashboard/admin_toko_dashboard_screen.dart`, `lib/screens/dashboard/owner_dashboard_screen.dart`). Sesuai spesifikasi `plan/api.md` (DELETE `/transactions/{id}` khusus Owner) dan permintaan pembatasan hak akses:
   1. `PenjualanTab` menambahkan properti `canDeleteTransaction` dan `testUser` serta getter `_canDelete` yang memastikan hanya pengguna dengan wewenang `OWNER` yang dapat memicu penghapusan transaksi.
@@ -108,7 +117,7 @@ Dokumen ini berfungsi sebagai katalog sentral untuk seluruh elemen dan komponen 
 - `2026-09-20`: **Penataan Ulang Tata Letak & Urutan Elemen UI Tab Laba Rugi (Owner)** (`lib/screens/dashboard/tabs/laba_rugi_tab.dart`). Tata letak disusun secara presisi mengikuti 9 urutan gambar referensi dengan tetap mempertahankan skema warna minimalis aplikasi Warungku (Material 3 surface, border outlineVariant tipis, tanpa warna norak/neon):
   1. Header halaman: "Laporan Keuangan" & "Analisis Performa Warung".
   2. Banner Card "Laporan Bulanan per Item" dengan tombol "Buka Laporan Item" (navigasi ke `MonthlyReportScreen`).
-  3. Baris Header "Ringkasan Laba-Rugi" dengan tombol aksi icon PDF (memicu `MonthlyReportPdfService.printMonthlyReport`).
+  3. Baris Header "Ringkasan Laba-Rugi" dengan tombol aksi icon PDF (memicu `LabaRugiPdfService.printLabaRugiReport`).
   4. ChoiceChips pilihan filter periode horizontal (Hari Ini, Kemarin, Minggu Ini, Bulan Ini, Bulan Lalu, Semua, Pilih Rentang).
   5. Card Rekap Performa: Total Penjualan, Total Pengeluaran (`- Rp ...`), Divider tipis, dan Laba Bersih (merah/hijau sesuai surplus/defisit).
   6. Section Rincian Harian: daftar tanggal dengan nominal omzet penjualan yang dapat di-expand (akordeon `ExpansionTile`) menampilkan daftar struk transaksi di hari tersebut (`TRX-...`, jam · kuantitas item, nominal) dengan tap untuk melihat `DetailTransaksiDialog`.

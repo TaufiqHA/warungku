@@ -41,6 +41,7 @@ class MonthlyReportPdfService {
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
+        maxPages: 100,
         margin: const pw.EdgeInsets.all(32),
         footer: (pw.Context context) {
           return pw.Column(

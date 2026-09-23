@@ -205,6 +205,7 @@ class MenuCatalogPdfService {
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
+        maxPages: 200,
         margin: const pw.EdgeInsets.symmetric(horizontal: 24, vertical: 24),
         build: (pw.Context context) {
           return [
