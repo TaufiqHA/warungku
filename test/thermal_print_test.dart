@@ -87,8 +87,8 @@ void main() {
       expect(writerCalled, false);
     });
 
-    test('memberi instruksi pengaturan Android saat izin diblokir permanen', () async {
-      permissionService.requester = () async => BluetoothPermissionStatus.permanentlyDenied;
+    test('memberi instruksi pengaturan Android saat izin ditolak', () async {
+      permissionService.requester = () async => BluetoothPermissionStatus.denied;
 
       final result = await service.sendToBluetooth(
         receiptBytes,
@@ -236,6 +236,29 @@ void main() {
       expect(result.success, false);
       expect(result.message, contains('Izin Bluetooth'));
     });
+
+    test('melacak status koneksi setelah mencetak tanpa query plugin', () async {
+      final result = await service.sendToBluetooth(
+        receiptBytes,
+        macAddress: '66:22:33:44:55:66',
+      );
+
+      expect(result.success, true);
+      expect(service.lastConnectionState, true);
+      expect(await service.isPrinterConnected(), false); // override seam pengujian
+    });
+
+    test('status koneksi menjadi terputus setelah kegagalan kirim', () async {
+      service.bluetoothWriter = (bytes) async => false;
+
+      final result = await service.sendToBluetooth(
+        receiptBytes,
+        macAddress: '66:22:33:44:55:66',
+      );
+
+      expect(result.success, false);
+      expect(service.lastConnectionState, false);
+    });
   });
 
   group('Struk kasir thermal', () {
@@ -302,6 +325,47 @@ void main() {
         isNot(contains('Jl. Raya Kampus No. 12, Sleman, Daerah Istimewa Yogyakarta 55281')),
       );
     });
+
+    test('karakter non-ASCII ditransliterasi agar tidak tercetak kacau', () {
+      final bytes = service.generateSalesReceiptBytes(
+        config: const ThermalPrinterConfig(paperWidth: 58),
+        storeName: 'Kafé "Nusantara" – 100°',
+        transactionId: 'TRX-102',
+        dateTimeStr: '18/09/2026 10:00',
+        customerName: 'Meja 3',
+        cashierName: 'Andi',
+        items: sampleItems,
+        subtotal: 30000,
+        discountAmount: 0,
+        paymentMethod: 'CASH',
+      );
+
+      final text = utf8.decode(bytes, allowMalformed: true);
+      expect(text, contains('Kafe "Nusantara" - 100 deg'));
+      expect(text, isNot(contains('é')));
+      expect(text, isNot(contains('–')));
+      expect(text, isNot(contains('°')));
+    });
+
+    test('nama pelanggan panjang dibungkus, tidak dipotong', () {
+      final bytes = service.generateSalesReceiptBytes(
+        config: const ThermalPrinterConfig(paperWidth: 58),
+        storeName: 'WARUNGKU',
+        transactionId: 'TRX-103',
+        dateTimeStr: '18/09/2026 10:00',
+        customerName: 'Pelanggan Sangat Panjang Sekali Namanya',
+        cashierName: 'Kasir',
+        items: sampleItems,
+        subtotal: 30000,
+        discountAmount: 0,
+        paymentMethod: 'CASH',
+      );
+
+      final text = utf8.decode(bytes, allowMalformed: true);
+      expect(text, contains('Pelanggan Sangat Panjang'));
+      expect(text, contains('Sekali'));
+      expect(text, contains('Namanya'));
+    });
   });
 
   group('Dialog Pengaturan Printer', () {
@@ -313,19 +377,18 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Kartu status
-      expect(find.text('Bluetooth perangkat'), findsOneWidget);
-      expect(find.text('Aktif'), findsOneWidget);
-      expect(find.text('Izin akses'), findsOneWidget);
-      expect(find.text('Koneksi printer'), findsOneWidget);
+      // Status ringkas satu baris
+      expect(find.text('Bluetooth aktif'), findsOneWidget);
+      expect(find.text('Izin belum'), findsOneWidget);
+      expect(find.text('Terputus'), findsOneWidget);
 
       // Banner izin + tombol aksi
       expect(find.text('Izin Bluetooth diperlukan'), findsOneWidget);
       expect(find.text('Beri Izin Bluetooth'), findsOneWidget);
 
-      // Tombol koneksi manual
+      // Tombol koneksi (toggle: 'Hubungkan' saat belum terhubung)
       expect(find.text('Hubungkan'), findsOneWidget);
-      expect(find.text('Putuskan'), findsOneWidget);
+      expect(find.text('Putuskan'), findsNothing);
 
       // Setelah izin diberikan (OS mengabulkan permintaan), daftar printer muncul & banner hilang
       permissionService.requester = () async => BluetoothPermissionStatus.granted;

@@ -73,7 +73,20 @@ class ThermalPrinterService {
   static final ThermalPrinterService _instance = ThermalPrinterService._internal();
   static ThermalPrinterService get instance => _instance;
 
-  ThermalPrinterService._internal();
+  ThermalPrinterService._internal() {
+    bluetoothConnectionChecker = () async => _lastConnectionState;
+  }
+
+  /// Status koneksi printer terakhir yang dilacak service sendiri.
+  ///
+  /// Tidak memakai `PrintBluetoothThermal.connectionStatus` karena plugin
+  /// mengimplementasikan method itu dengan menulis satu byte spasi ke printer
+  /// (lihat `checkConnectionStatus()` pada plugin) — efek samping yang tidak
+  /// diinginkan untuk sekadar indikator UI.
+  bool _lastConnectionState = false;
+
+  /// Status koneksi terakhir yang diketahui (untuk indikator UI & pengujian).
+  bool get lastConnectionState => _lastConnectionState;
 
   /// Socket connector abstraction for testability
   Future<Socket> Function(String host, int port, {Duration? timeout}) socketConnector = Socket.connect;
@@ -111,15 +124,11 @@ class ThermalPrinterService {
     }
   };
 
-  /// Status koneksi socket Bluetooth ke printer (untuk indikator UI).
-  Future<bool> Function() bluetoothConnectionChecker = () async {
-    try {
-      return await PrintBluetoothThermal.connectionStatus;
-    } catch (e) {
-      debugPrint('ThermalPrinterService.connectionStatus: $e');
-      return false;
-    }
-  };
+  /// Status koneksi printer untuk indikator UI.
+  ///
+  /// Seam pengujian dapat mengganti fungsi ini; nilai bawaan mengembalikan
+  /// [lastConnectionState] tanpa menyentuh plugin.
+  late Future<bool> Function() bluetoothConnectionChecker;
 
   /// Pengelola izin Bluetooth runtime.
   BluetoothPermissionService permissionService = BluetoothPermissionService.instance;
@@ -205,6 +214,7 @@ class ThermalPrinterService {
 
     try {
       final isConnected = await bluetoothConnector(mac);
+      _lastConnectionState = isConnected;
       if (isConnected) {
         return PrintResult(true, 'Terhubung ke printer Bluetooth ($displayName)');
       }
@@ -213,6 +223,7 @@ class ThermalPrinterService {
         'Gagal terhubung ke ($displayName). Pastikan printer menyala, sudah dipasangkan (pair) di Bluetooth HP, dan tidak dipakai perangkat lain.',
       );
     } catch (e) {
+      _lastConnectionState = false;
       return PrintResult(false, 'Error koneksi Bluetooth printer: ${e.toString()}');
     }
   }
@@ -221,6 +232,7 @@ class ThermalPrinterService {
   Future<PrintResult> disconnectPrinter() async {
     try {
       await bluetoothDisconnector();
+      _lastConnectionState = false;
       return const PrintResult(true, 'Koneksi printer Bluetooth diputuskan');
     } catch (e) {
       return PrintResult(false, 'Gagal memutuskan koneksi printer: ${e.toString()}');
@@ -232,6 +244,8 @@ class ThermalPrinterService {
       await bluetoothDisconnector();
     } catch (e) {
       debugPrint('ThermalPrinterService._safeDisconnect: $e');
+    } finally {
+      _lastConnectionState = false;
     }
   }
 
@@ -245,38 +259,57 @@ class ThermalPrinterService {
     await config.saveToPrefs(prefs);
   }
 
+  /// Menyusun dua kolom selebar [width].
+  ///
+  /// Bila tidak muat dalam satu baris, kolom kiri dipecah ke beberapa baris lalu
+  /// kolom kanan diletakkan rata kanan pada baris berikutnya — tidak ada teks
+  /// yang dipotong.
   String _twoColumns(String left, String right, int width) {
-    if (left.length + right.length <= width) {
-      final spaceCount = width - left.length - right.length;
-      return left + (' ' * spaceCount) + right;
+    final leftText = _asciiSafe(left);
+    final rightText = _asciiSafe(right).trim();
+    if (leftText.length + rightText.length <= width) {
+      return leftText + (' ' * (width - leftText.length - rightText.length)) + rightText;
     }
-    // Jika terlalu panjang, potong left atau wrap
-    final available = width - right.length - 1;
-    if (available > 0 && left.length > available) {
-      final trimmed = left.substring(0, available);
-      return '$trimmed $right';
+
+    final lines = <String>[..._wrapText(leftText, width)];
+    for (final line in _wrapText(rightText, width)) {
+      lines.add(line.length < width ? (' ' * (width - line.length)) + line : line);
     }
-    return '$left $right';
+    return lines.join('\n');
   }
 
-  /// Memecah teks panjang menjadi baris-baris selebar [width] karakter kertas.
+  /// Memecah teks menjadi baris-baris selebar [width] karakter kertas.
+  ///
+  /// Kata tunggal yang lebih panjang dari [width] dipotong paksa agar tidak ada
+  /// karakter yang hilang.
   List<String> _wrapText(String text, int width) {
-    final clean = text.trim();
+    final clean = _asciiSafe(text).trim();
     if (clean.isEmpty || width <= 0) return const [];
 
-    final words = clean.split(RegExp(r'\s+'));
     final lines = <String>[];
     var current = '';
 
-    for (final word in words) {
-      if (current.isEmpty) {
-        current = word;
-      } else if (current.length + 1 + word.length <= width) {
+    for (final word in clean.split(RegExp(r'\s+'))) {
+      if (word.isEmpty) continue;
+
+      if (current.isNotEmpty && current.length + 1 + word.length <= width) {
         current = '$current $word';
-      } else {
-        lines.add(current);
-        current = word;
+        continue;
       }
+      if (current.isNotEmpty) {
+        lines.add(current);
+        current = '';
+      }
+      if (word.length <= width) {
+        current = word;
+        continue;
+      }
+      var rest = word;
+      while (rest.length > width) {
+        lines.add(rest.substring(0, width));
+        rest = rest.substring(width);
+      }
+      current = rest;
     }
     if (current.isNotEmpty) lines.add(current);
     return lines;
@@ -294,6 +327,119 @@ class ThermalPrinterService {
     return buffer.toString();
   }
 
+  /// Byte teks yang aman untuk printer thermal (lihat [_asciiSafe]).
+  List<int> _textToBytes(String text) => utf8.encode(_asciiSafe(text));
+
+  /// Mengubah teks menjadi ASCII-aman.
+  ///
+  /// Printer thermal umumnya memakai code page CP437/GBK secara default, sehingga
+  /// byte UTF-8 multi-byte untuk karakter non-ASCII tercetak kacau. Karena ASCII
+  /// identik di semua code page, karakter Latin-1 ditransliterasi (é→e, ñ→n,
+  /// tanda kutip pintar → ASCII) dan karakter tak dikenal diganti '?'.
+  static String _asciiSafe(String input) {
+    final buffer = StringBuffer();
+    for (final rune in input.runes) {
+      if (rune < 0x80) {
+        buffer.writeCharCode(rune);
+      } else {
+        buffer.write(_asciiFallback[rune] ?? '?');
+      }
+    }
+    return buffer.toString();
+  }
+
+  static const Map<int, String> _asciiFallback = {
+    0x00A0: ' ',
+    0x00AB: '"',
+    0x00BB: '"',
+    0x00B0: ' deg',
+    0x00B7: '.',
+    0x00D7: 'x',
+    0x00F7: '/',
+    0x2010: '-',
+    0x2011: '-',
+    0x2012: '-',
+    0x2013: '-',
+    0x2014: '-',
+    0x2015: '-',
+    0x2018: "'",
+    0x2019: "'",
+    0x201A: "'",
+    0x201B: "'",
+    0x201C: '"',
+    0x201D: '"',
+    0x201E: '"',
+    0x201F: '"',
+    0x2022: '*',
+    0x2026: '...',
+    0x2032: "'",
+    0x2033: '"',
+    0x20AC: 'EUR',
+    0x2122: '(TM)',
+    0x00C0: 'A',
+    0x00C1: 'A',
+    0x00C2: 'A',
+    0x00C3: 'A',
+    0x00C4: 'A',
+    0x00C5: 'A',
+    0x00C6: 'AE',
+    0x00C7: 'C',
+    0x00C8: 'E',
+    0x00C9: 'E',
+    0x00CA: 'E',
+    0x00CB: 'E',
+    0x00CC: 'I',
+    0x00CD: 'I',
+    0x00CE: 'I',
+    0x00CF: 'I',
+    0x00D0: 'D',
+    0x00D1: 'N',
+    0x00D2: 'O',
+    0x00D3: 'O',
+    0x00D4: 'O',
+    0x00D5: 'O',
+    0x00D6: 'O',
+    0x00D8: 'O',
+    0x00D9: 'U',
+    0x00DA: 'U',
+    0x00DB: 'U',
+    0x00DC: 'U',
+    0x00DD: 'Y',
+    0x00DE: 'TH',
+    0x00DF: 'ss',
+    0x00E0: 'a',
+    0x00E1: 'a',
+    0x00E2: 'a',
+    0x00E3: 'a',
+    0x00E4: 'a',
+    0x00E5: 'a',
+    0x00E6: 'ae',
+    0x00E7: 'c',
+    0x00E8: 'e',
+    0x00E9: 'e',
+    0x00EA: 'e',
+    0x00EB: 'e',
+    0x00EC: 'i',
+    0x00ED: 'i',
+    0x00EE: 'i',
+    0x00EF: 'i',
+    0x00F0: 'd',
+    0x00F1: 'n',
+    0x00F2: 'o',
+    0x00F3: 'o',
+    0x00F4: 'o',
+    0x00F5: 'o',
+    0x00F6: 'o',
+    0x00F8: 'o',
+    0x00F9: 'u',
+    0x00FA: 'u',
+    0x00FB: 'u',
+    0x00FC: 'u',
+    0x00FD: 'y',
+    0x00FE: 'th',
+    0x00FF: 'y',
+  };
+
   List<int> generateTestReceiptBytes(ThermalPrinterConfig config) {
     final bytes = <int>[];
     final w = config.maxCharsPerLine;
@@ -302,24 +448,24 @@ class ThermalPrinterService {
     bytes.addAll(cmdAlignCenter);
     bytes.addAll(cmdFontTitle);
     bytes.addAll(cmdBoldOn);
-    bytes.addAll(utf8.encode('WARUNGKU\n'));
+    bytes.addAll(_textToBytes('WARUNGKU\n'));
     bytes.addAll(cmdFontNormal);
     bytes.addAll(cmdBoldOff);
-    bytes.addAll(utf8.encode('UJI COBA PRINTER THERMAL\n'));
-    bytes.addAll(utf8.encode('${'-' * w}\n'));
+    bytes.addAll(_textToBytes('UJI COBA PRINTER THERMAL\n'));
+    bytes.addAll(_textToBytes('${'-' * w}\n'));
     bytes.addAll(cmdAlignLeft);
-    bytes.addAll(utf8.encode('Kertas: ${config.paperWidth}mm ($w kolom)\n'));
+    bytes.addAll(_textToBytes('Kertas: ${config.paperWidth}mm ($w kolom)\n'));
     final targetStr = config.isBluetooth
         ? 'Bluetooth: ${config.printerName.isNotEmpty ? config.printerName : config.macAddress}\n'
         : 'Target: ${config.ip}:${config.port}\n';
-    bytes.addAll(utf8.encode(targetStr));
-    bytes.addAll(utf8.encode('Waktu : ${DateTime.now().toString().substring(0, 19)}\n'));
-    bytes.addAll(utf8.encode('${'-' * w}\n'));
+    bytes.addAll(_textToBytes(targetStr));
+    bytes.addAll(_textToBytes('Waktu : ${DateTime.now().toString().substring(0, 19)}\n'));
+    bytes.addAll(_textToBytes('${'-' * w}\n'));
     bytes.addAll(cmdAlignCenter);
     bytes.addAll(cmdBoldOn);
-    bytes.addAll(utf8.encode('PRINTER BERHASIL TERHUBUNG!\n'));
+    bytes.addAll(_textToBytes('PRINTER BERHASIL TERHUBUNG!\n'));
     bytes.addAll(cmdBoldOff);
-    bytes.addAll(utf8.encode('${'-' * w}\n'));
+    bytes.addAll(_textToBytes('${'-' * w}\n'));
     bytes.addAll(cmdFeed3);
     bytes.addAll(cmdCut);
 
@@ -349,54 +495,54 @@ class ThermalPrinterService {
     bytes.addAll(cmdAlignCenter);
     bytes.addAll(cmdFontTitle);
     bytes.addAll(cmdBoldOn);
-    bytes.addAll(utf8.encode('$storeName\n'));
+    bytes.addAll(_textToBytes('$storeName\n'));
     bytes.addAll(cmdFontNormal);
     bytes.addAll(cmdBoldOff);
     for (final line in _wrapText(storeAddress ?? '', w)) {
-      bytes.addAll(utf8.encode('$line\n'));
+      bytes.addAll(_textToBytes('$line\n'));
     }
-    bytes.addAll(utf8.encode('STRUK PEMBAYARAN\n'));
-    bytes.addAll(utf8.encode('${'-' * w}\n'));
+    bytes.addAll(_textToBytes('STRUK PEMBAYARAN\n'));
+    bytes.addAll(_textToBytes('${'-' * w}\n'));
 
     // Info Transaksi
     bytes.addAll(cmdAlignLeft);
-    bytes.addAll(utf8.encode('${_twoColumns('No. Trx', transactionId, w)}\n'));
-    bytes.addAll(utf8.encode('${_twoColumns('Waktu', dateTimeStr, w)}\n'));
-    bytes.addAll(utf8.encode('${_twoColumns('Kasir', cashierName, w)}\n'));
+    bytes.addAll(_textToBytes('${_twoColumns('No. Trx', transactionId, w)}\n'));
+    bytes.addAll(_textToBytes('${_twoColumns('Waktu', dateTimeStr, w)}\n'));
+    bytes.addAll(_textToBytes('${_twoColumns('Kasir', cashierName, w)}\n'));
     if (customerName.isNotEmpty && customerName != '-') {
-      bytes.addAll(utf8.encode('${_twoColumns('Pelanggan', customerName, w)}\n'));
+      bytes.addAll(_textToBytes('${_twoColumns('Pelanggan', customerName, w)}\n'));
     }
-    bytes.addAll(utf8.encode('${'-' * w}\n'));
+    bytes.addAll(_textToBytes('${'-' * w}\n'));
 
     // Daftar Item
     for (final item in items) {
       bytes.addAll(cmdBoldOn);
-      bytes.addAll(utf8.encode('${item.name}\n'));
+      bytes.addAll(_textToBytes('${item.name}\n'));
       bytes.addAll(cmdBoldOff);
       final qtyPrice = '${item.quantity} x ${_formatRupiah(item.price)}';
       final itemTotal = _formatRupiah(item.subtotal);
-      bytes.addAll(utf8.encode('${_twoColumns('  $qtyPrice', itemTotal, w)}\n'));
+      bytes.addAll(_textToBytes('${_twoColumns('  $qtyPrice', itemTotal, w)}\n'));
     }
-    bytes.addAll(utf8.encode('${'-' * w}\n'));
+    bytes.addAll(_textToBytes('${'-' * w}\n'));
 
     // Subtotal & Diskon
-    bytes.addAll(utf8.encode('${_twoColumns('Subtotal', _formatRupiah(subtotal), w)}\n'));
+    bytes.addAll(_textToBytes('${_twoColumns('Subtotal', _formatRupiah(subtotal), w)}\n'));
     if (discountAmount > 0) {
-      bytes.addAll(utf8.encode('${_twoColumns('Diskon', '- ${_formatRupiah(discountAmount)}', w)}\n'));
+      bytes.addAll(_textToBytes('${_twoColumns('Diskon', '- ${_formatRupiah(discountAmount)}', w)}\n'));
     }
 
     // Grand Total
     bytes.addAll(cmdBoldOn);
-    bytes.addAll(utf8.encode('${_twoColumns('TOTAL', _formatRupiah(grandTotal), w)}\n'));
+    bytes.addAll(_textToBytes('${_twoColumns('TOTAL', _formatRupiah(grandTotal), w)}\n'));
     bytes.addAll(cmdBoldOff);
-    bytes.addAll(utf8.encode('${'-' * w}\n'));
+    bytes.addAll(_textToBytes('${'-' * w}\n'));
 
     // Metode Bayar
-    bytes.addAll(utf8.encode('${_twoColumns('Metode Bayar', paymentMethod, w)}\n'));
+    bytes.addAll(_textToBytes('${_twoColumns('Metode Bayar', paymentMethod, w)}\n'));
 
     // Footer
     bytes.addAll(cmdAlignCenter);
-    bytes.addAll(utf8.encode('\nTerima kasih atas kunjungan Anda!\n'));
+    bytes.addAll(_textToBytes('\nTerima kasih atas kunjungan Anda!\n'));
     bytes.addAll(cmdFeed3);
     bytes.addAll(cmdCut);
 
@@ -420,33 +566,33 @@ class ThermalPrinterService {
     bytes.addAll(cmdAlignCenter);
     bytes.addAll(cmdFontTitle);
     bytes.addAll(cmdBoldOn);
-    bytes.addAll(utf8.encode('PESANAN DAPUR\n'));
+    bytes.addAll(_textToBytes('PESANAN DAPUR\n'));
     bytes.addAll(cmdFontNormal);
     bytes.addAll(cmdBoldOff);
-    bytes.addAll(utf8.encode('${'-' * w}\n'));
+    bytes.addAll(_textToBytes('${'-' * w}\n'));
 
     // Metadata
     bytes.addAll(cmdAlignLeft);
     final cust = group.customerName.isNotEmpty && group.customerName != '-'
         ? group.customerName
         : 'Pelanggan';
-    bytes.addAll(utf8.encode('Meja/Pelanggan: $cust\n'));
-    bytes.addAll(utf8.encode('No. Pesanan   : ${group.transactionId}\n'));
-    bytes.addAll(utf8.encode('Waktu         : $dateStr $timeStr\n'));
-    bytes.addAll(utf8.encode('${'-' * w}\n'));
+    bytes.addAll(_textToBytes('Meja/Pelanggan: $cust\n'));
+    bytes.addAll(_textToBytes('No. Pesanan   : ${group.transactionId}\n'));
+    bytes.addAll(_textToBytes('Waktu         : $dateStr $timeStr\n'));
+    bytes.addAll(_textToBytes('${'-' * w}\n'));
 
     // List Item Dapur
     for (final item in group.items) {
       bytes.addAll(cmdBoldOn);
       final line = _twoColumns(item.namaItem, '${item.jumlah}x', w);
-      bytes.addAll(utf8.encode('$line\n'));
+      bytes.addAll(_textToBytes('$line\n'));
       bytes.addAll(cmdBoldOff);
       if (item.catatan.isNotEmpty) {
-        bytes.addAll(utf8.encode(' * Note: ${item.catatan}\n'));
+        bytes.addAll(_textToBytes(' * Note: ${item.catatan}\n'));
       }
     }
 
-    bytes.addAll(utf8.encode('${'-' * w}\n'));
+    bytes.addAll(_textToBytes('${'-' * w}\n'));
     bytes.addAll(cmdFeed3);
     bytes.addAll(cmdCut);
 
@@ -485,6 +631,7 @@ class ThermalPrinterService {
     try {
       // 3. Sambungkan (native plugin otomatis menutup socket lama lebih dulu).
       final isConnected = await bluetoothConnector(mac);
+      _lastConnectionState = isConnected;
       if (!isConnected) {
         return PrintResult(
           false,
@@ -493,18 +640,24 @@ class ThermalPrinterService {
       }
 
       // 4. Kirim data struk. Plugin sudah memecah kiriman per 16 KB.
+      // Catatan: plugin `print_bluetooth_thermal` menambahkan satu byte newline
+      // di awal setiap `writeBytes` (lihat handleWriteBytes pada plugin), jadi
+      // struk memuat satu baris kosong di atas yang tidak bisa dihilangkan dari
+      // sisi aplikasi tanpa mem-fork plugin.
       var isSent = await bluetoothWriter(bytes);
 
       if (!isSent) {
         // Koneksi basi (printer baru dinyalakan / socket mati) -> sambung ulang & kirim sekali lagi.
         await _safeDisconnect();
         final isReconnected = await bluetoothConnector(mac);
+        _lastConnectionState = isReconnected;
         if (isReconnected) {
           isSent = await bluetoothWriter(bytes);
         }
       }
 
       if (isSent) {
+        _lastConnectionState = true;
         return PrintResult(
           true,
           'Struk berhasil dicetak via Bluetooth ($displayName)',

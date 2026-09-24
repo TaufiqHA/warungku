@@ -792,7 +792,7 @@ void main() {
     expect(find.text('Jaringan (IP)'), findsOneWidget);
 
     // Mode Bluetooth (default) menampilkan daftar perangkat Bluetooth terpasang
-    expect(find.text('Perangkat Bluetooth Terpasang'), findsOneWidget);
+    expect(find.text('Printer Bluetooth'), findsOneWidget);
     expect(find.text('RPP02N Thermal (66:22:33:44:55:66)'), findsOneWidget);
 
     // Beralih ke mode Jaringan (IP)
@@ -1425,6 +1425,73 @@ void main() {
     expect(result!.dataType, 'Pengeluaran Saja');
     expect(result!.startDate, DateTime(2026, 9, 1));
     expect(result!.endDate, DateTime(2026, 9, 19));
+  });
+
+  testWidgets('Daftar Transaksi Per Struk tidak membuka aksi apa pun saat item di-tap',
+      (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1080, 2600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+
+    TransactionService.clearCache();
+    ExpenseService.clearCache();
+
+    final trxClient = MockClient((request) async {
+      if (request.url.path.endsWith('/transactions')) {
+        return http.Response(
+          jsonEncode({
+            'success': true,
+            'data': [
+              {
+                'idTransaksi': 'TRX-LR-NOTAP-01',
+                'id': 'PRD-1',
+                'namaItem': 'Kopi Susu',
+                'jumlah': 2,
+                'harga': 15000.0,
+                'waktu': DateTime.now().toIso8601String(),
+                'dicatatOleh': 'Kasir',
+                'catatan': '',
+                'payment_method': 'CASH',
+                'orderStatus': 'COMPLETED',
+                'customerName': 'Meja 1',
+                'servedQty': 2,
+              },
+            ],
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }
+      return http.Response('{"success": true, "data": []}', 200,
+          headers: {'content-type': 'application/json'});
+    });
+    final expClient = MockClient((request) async => http.Response(
+        '{"success": true, "data": []}', 200,
+        headers: {'content-type': 'application/json'}));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: LabaRugiTab(
+            transactionService: TransactionService(client: trxClient),
+            expenseService: ExpenseService(client: expClient),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Item transaksi tampil di seksi Daftar Transaksi Per Struk
+    expect(find.textContaining('Daftar Transaksi Per Struk'), findsOneWidget);
+    expect(find.text('TRX-LR-NOTAP-01'), findsOneWidget);
+
+    // Tap item -> tidak membuka dialog / aksi apa pun
+    await tester.tap(find.text('TRX-LR-NOTAP-01'));
+    await tester.pumpAndSettle();
+    expect(find.text('Detail Transaksi'), findsNothing);
+
+    TransactionService.clearCache();
+    ExpenseService.clearCache();
   });
 
   test('TransactionModel status helper dan parsing key status mengenali berbagai alias status', () {
@@ -2933,6 +3000,76 @@ void main() {
     await tester.tap(find.text('Detail'));
     await tester.pumpAndSettle();
     expect(find.text('Detail Transaksi'), findsOneWidget);
+
+    TransactionService.clearCache();
+  });
+
+  testWidgets(
+      'PenjualanTab kartu transaksi Owner dapat di-expand inline dan menampilkan aksi Hapus',
+      (WidgetTester tester) async {
+    TransactionService.clearCache();
+    await TokenManager.saveSession(token: 'mock_token', user: ownerUser);
+
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/transactions')) {
+        return http.Response(
+          jsonEncode({
+            'success': true,
+            'data': [
+              {
+                'idTransaksi': 'TRX-OWNER-EXPAND-01',
+                'id': 'PRD-20',
+                'namaItem': 'Ikan Bakar Jimbaran',
+                'jumlah': 1,
+                'harga': 45000.0,
+                'waktu': DateTime.now().toIso8601String(),
+                'dicatatOleh': 'Admin Toko',
+                'catatan': 'Pedas',
+                'payment_method': 'CASH',
+                'orderStatus': 'COMPLETED',
+                'customerName': 'Bu Rina',
+                'servedQty': 1,
+              },
+            ],
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }
+      return http.Response('{"success": false}', 404);
+    });
+
+    final service = TransactionService(client: client);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PenjualanTab(
+            testUser: ownerUser,
+            canAddTransaction: false,
+            transactionService: service,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // 1. Kartu tampil compact, rincian belum tampil
+    expect(find.text('Bu Rina'), findsOneWidget);
+    expect(find.text('TRX-OWNER-EXPAND-01'), findsOneWidget);
+    expect(find.text('1x Ikan Bakar Jimbaran'), findsNothing);
+
+    // 2. Tap kartu untuk expand inline (bukan membuka modal)
+    await tester.tap(find.text('Bu Rina'));
+    await tester.pumpAndSettle();
+
+    // 3. Rincian transaksi & tombol aksi Hapus/Detail/Cetak Ulang tampil
+    expect(find.text('1x Ikan Bakar Jimbaran'), findsOneWidget);
+    expect(find.text('Catatan: Pedas'), findsOneWidget);
+    expect(find.text('Kasir: Admin Toko'), findsOneWidget);
+    expect(find.widgetWithText(TextButton, 'Hapus'), findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, 'Detail'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Cetak Ulang'), findsOneWidget);
 
     TransactionService.clearCache();
   });

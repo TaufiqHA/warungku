@@ -128,11 +128,18 @@ void main() {
       // Dismissible (swipe-to-delete) harus ada untuk Owner
       expect(find.byType(Dismissible), findsOneWidget);
 
-      // Ketuk kartu untuk membuka DetailTransaksiDialog
+      // Ketuk kartu untuk expand rincian inline
       await tester.tap(find.text('Mas Budi'));
       await tester.pumpAndSettle();
 
-      // Modal detail muncul dengan opsi Hapus Transaksi
+      // Rincian tampil; tombol Hapus (khusus Owner) dan Detail tersedia
+      expect(find.widgetWithText(TextButton, 'Hapus'), findsOneWidget);
+      expect(find.text('Detail'), findsOneWidget);
+
+      // Tombol Detail membuka DetailTransaksiDialog dengan opsi Hapus Transaksi
+      await tester.tap(find.text('Detail'));
+      await tester.pumpAndSettle();
+
       expect(find.text('Detail Transaksi'), findsOneWidget);
       expect(find.text('Hapus Transaksi'), findsOneWidget);
     });

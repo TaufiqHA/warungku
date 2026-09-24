@@ -560,8 +560,7 @@ class _PenjualanTabState extends State<PenjualanTab> with WidgetsBindingObserver
                             return RiwayatTransaksiCard(
                               group: group,
                               isCompact: true,
-                              isExpandable: !_canDelete,
-                              onTap: _canDelete ? () => _showDetailTransaction(group) : null,
+                              isExpandable: true,
                               onPrintAgain: () => _handlePrintAgain(group),
                               onDetail: () => _showDetailTransaction(group),
                               onDelete: _canDelete ? () => _handleDeleteTransaction(group) : null,

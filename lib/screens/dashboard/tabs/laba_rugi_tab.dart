@@ -1147,52 +1147,46 @@ class _LabaRugiTabState extends State<LabaRugiTab> {
                               ? g.paymentMethod.toUpperCase()
                               : 'CASH';
 
-                          return InkWell(
-                            onTap: () => DetailTransaksiDialog.show(
-                              context: context,
-                              group: g,
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
                             ),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 12,
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          g.idTransaksi,
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 13,
-                                          ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        g.idTransaksi,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13,
                                         ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          'Berhasil • $paymentText',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: Colors.green.shade700,
-                                            fontWeight: FontWeight.w600,
-                                          ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'Berhasil • $paymentText',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.green.shade700,
+                                          fontWeight: FontWeight.w600,
                                         ),
-                                      ],
-                                    ),
+                                      ),
+                                    ],
                                   ),
-                                  Text(
-                                    _formatRupiah(g.totalHarga),
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 13,
-                                      color: Colors.green.shade700,
-                                    ),
+                                ),
+                                Text(
+                                  _formatRupiah(g.totalHarga),
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                    color: Colors.green.shade700,
                                   ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
                           );
                         },

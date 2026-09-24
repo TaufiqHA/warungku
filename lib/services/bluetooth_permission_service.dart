@@ -3,7 +3,11 @@ import 'package:flutter/foundation.dart';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 
 /// Status izin Bluetooth runtime (Android 12+ / `BLUETOOTH_CONNECT`).
-enum BluetoothPermissionStatus { granted, denied, permanentlyDenied }
+///
+/// Plugin `print_bluetooth_thermal` hanya mengembalikan granted/denied (tidak
+/// membedakan penolakan permanen "jangan tanyakan lagi"), jadi status disamakan
+/// menjadi [denied] — pesan ke pengguna tetap mengarahkan ke Pengaturan Android.
+enum BluetoothPermissionStatus { granted, denied }
 
 /// Pengelola izin Bluetooth runtime tanpa dependency tambahan.
 ///
@@ -62,8 +66,6 @@ class BluetoothPermissionService {
   /// Pesan siap pakai untuk ditampilkan pada snackbar / banner.
   static String message(BluetoothPermissionStatus status) {
     switch (status) {
-      case BluetoothPermissionStatus.permanentlyDenied:
-        return 'Izin Bluetooth diblokir. Buka Pengaturan Android → Aplikasi → Warungku → Izin, lalu izinkan Perangkat di sekitar.';
       case BluetoothPermissionStatus.denied:
         return 'Izin Bluetooth belum diberikan. Izinkan akses Bluetooth (atau aktifkan manual di Pengaturan Android → Aplikasi → Warungku → Izin) agar printer thermal bisa dipakai.';
       case BluetoothPermissionStatus.granted:

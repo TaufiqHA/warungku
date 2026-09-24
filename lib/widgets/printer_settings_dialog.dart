@@ -93,7 +93,10 @@ class _PrinterSettingsDialogState extends State<PrinterSettingsDialog> {
         _pairedDevices = result.devices;
         _deviceError = result.errorMessage;
         _isLoadingDevices = false;
-        if (_selectedMac.isEmpty && result.devices.isNotEmpty) {
+        // Pastikan MAC terpilih selalu ada di daftar paired; kalau printer
+        // tersimpan sudah tidak terpasang, jatuh ke perangkat pertama.
+        if (result.devices.isNotEmpty &&
+            !result.devices.any((d) => d.macAdress == _selectedMac)) {
           _selectedMac = result.devices.first.macAdress;
           _selectedPrinterName = result.devices.first.name;
         }
@@ -201,31 +204,19 @@ class _PrinterSettingsDialogState extends State<PrinterSettingsDialog> {
     }
   }
 
-  Widget _buildStatusRow(
-    ThemeData theme, {
-    required IconData icon,
-    required String label,
-    required String value,
-    required bool isOk,
-  }) {
+  /// Item status ringkas: ikon + teks kecil (tanpa label terpisah).
+  Widget _statusItem(ThemeData theme, IconData icon, String text, bool isOk) {
     final color = isOk ? const Color(0xFF2E7D32) : theme.colorScheme.error;
     return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 16, color: color),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            label,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ),
+        Icon(icon, size: 15, color: color),
+        const SizedBox(width: 5),
         Text(
-          value,
+          text,
           style: TextStyle(
             fontSize: 12,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w600,
             color: color,
           ),
         ),
@@ -258,97 +249,67 @@ class _PrinterSettingsDialogState extends State<PrinterSettingsDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Kartu Status Printer
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surfaceContainerLowest,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: theme.colorScheme.outlineVariant.withValues(alpha: 0.6),
+              // Status ringkas satu baris
+              Wrap(
+                spacing: 14,
+                runSpacing: 6,
+                children: [
+                  _statusItem(
+                    theme,
+                    Icons.bluetooth_rounded,
+                    _btEnabled ? 'Bluetooth aktif' : 'Bluetooth nonaktif',
+                    _btEnabled,
                   ),
-                ),
-                child: Column(
-                  children: [
-                    _buildStatusRow(
-                      theme,
-                      icon: Icons.bluetooth_rounded,
-                      label: 'Bluetooth perangkat',
-                      value: _btEnabled ? 'Aktif' : 'Nonaktif',
-                      isOk: _btEnabled,
-                    ),
-                    const SizedBox(height: 6),
-                    _buildStatusRow(
-                      theme,
-                      icon: Icons.verified_user_outlined,
-                      label: 'Izin akses',
-                      value: _btPermission == BluetoothPermissionStatus.granted ? 'Diberikan' : 'Belum',
-                      isOk: _btPermission == BluetoothPermissionStatus.granted,
-                    ),
-                    const SizedBox(height: 6),
-                    _buildStatusRow(
-                      theme,
-                      icon: Icons.cable_rounded,
-                      label: 'Koneksi printer',
-                      value: _btConnected ? 'Terhubung' : 'Terputus',
-                      isOk: _btConnected,
-                    ),
-                  ],
-                ),
+                  _statusItem(
+                    theme,
+                    Icons.verified_user_outlined,
+                    _btPermission == BluetoothPermissionStatus.granted ? 'Izin diberikan' : 'Izin belum',
+                    _btPermission == BluetoothPermissionStatus.granted,
+                  ),
+                  _statusItem(
+                    theme,
+                    Icons.cable_rounded,
+                    _btConnected ? 'Terhubung' : 'Terputus',
+                    _btConnected,
+                  ),
+                ],
               ),
 
               // Banner izin Bluetooth (hanya saat izin belum diberikan)
               if (_btPermission != BluetoothPermissionStatus.granted) ...[
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
                 Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.fromLTRB(10, 4, 6, 4),
                   decoration: BoxDecoration(
                     color: theme.colorScheme.errorContainer.withValues(alpha: 0.4),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                  child: Row(
                     children: [
-                      Row(
-                        children: [
-                          Icon(Icons.warning_amber_rounded, size: 18, color: theme.colorScheme.error),
-                          const SizedBox(width: 8),
-                          Text(
-                            _btPermission == BluetoothPermissionStatus.permanentlyDenied
-                                ? 'Izin Bluetooth diblokir'
-                                : 'Izin Bluetooth diperlukan',
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        'Bila dialog izin tidak muncul, aktifkan manual di Pengaturan Android → Aplikasi → Warungku → Izin.',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                          fontSize: 12,
+                      Icon(Icons.warning_amber_rounded, size: 16, color: theme.colorScheme.error),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text(
+                          'Izin Bluetooth diperlukan',
+                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5),
                         ),
                       ),
-                      const SizedBox(height: 10),
-                      AppButton(
-                        text: 'Beri Izin Bluetooth',
-                        height: 38,
+                      TextButton(
                         onPressed: _handlePermissionAction,
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: const Text('Beri Izin Bluetooth', style: TextStyle(fontSize: 12)),
                       ),
                     ],
                   ),
                 ),
               ],
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
 
               // Pilihan Jenis Koneksi (Bluetooth vs Jaringan)
-              Text(
-                'Tipe Koneksi Printer',
-                style: theme.textTheme.labelMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
               Row(
                 children: [
                   Expanded(
@@ -376,7 +337,7 @@ class _PrinterSettingsDialogState extends State<PrinterSettingsDialog> {
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
 
               // Form Mode Bluetooth
               if (_connectionType == 'bluetooth') ...[
@@ -384,7 +345,7 @@ class _PrinterSettingsDialogState extends State<PrinterSettingsDialog> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      'Perangkat Bluetooth Terpasang',
+                      'Printer Bluetooth',
                       style: theme.textTheme.labelMedium?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                         fontWeight: FontWeight.w600,
@@ -480,38 +441,18 @@ class _PrinterSettingsDialogState extends State<PrinterSettingsDialog> {
                       ),
                     ),
                   ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: AppButton(
-                        text: _btConnected ? 'Sambung Ulang' : 'Hubungkan',
-                        isLoading: _isConnecting,
-                        height: 38,
-                        onPressed: _isConnecting ? null : _handleConnect,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: AppButton(
-                        text: 'Putuskan',
-                        isPrimary: false,
-                        height: 38,
-                        onPressed: _handleDisconnect,
-                      ),
-                    ),
-                  ],
+                const SizedBox(height: 10),
+                AppButton(
+                  text: _btConnected ? 'Putuskan' : 'Hubungkan',
+                  isLoading: _isConnecting,
+                  isPrimary: !_btConnected,
+                  height: 44,
+                  onPressed: _isConnecting
+                      ? null
+                      : (_btConnected ? _handleDisconnect : _handleConnect),
                 ),
               ] else ...[
                 // Form Mode Network (IP & Port)
-                Text(
-                  'Konektivitas ESC/POS (LAN / WiFi / Emulator)',
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 12),
                 AppTextField(
                   label: 'Alamat IP Printer',
                   hintText: 'Misal: 10.0.2.2 atau 192.168.1.200',
@@ -526,16 +467,9 @@ class _PrinterSettingsDialogState extends State<PrinterSettingsDialog> {
                   keyboardType: TextInputType.number,
                 ),
               ],
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
 
               // Ukuran Kertas Struk
-              Text(
-                'Ukuran Kertas Thermal',
-                style: theme.textTheme.labelMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
               Row(
                 children: [
                   Expanded(
@@ -561,25 +495,27 @@ class _PrinterSettingsDialogState extends State<PrinterSettingsDialog> {
                   ),
                 ],
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 14),
 
               // Tombol Tes Cetak
-              OutlinedButton.icon(
-                onPressed: _isTesting ? null : _handleTestPrint,
-                icon: _isTesting
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.receipt_long_rounded, size: 18),
-                label: Text(_isTesting ? 'Menguji Printer...' : 'Tes Cetak Thermal'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: accentGreen,
-                  side: const BorderSide(color: accentGreen),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+              SizedBox(
+                height: 44,
+                child: OutlinedButton.icon(
+                  onPressed: _isTesting ? null : _handleTestPrint,
+                  icon: _isTesting
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.receipt_long_rounded, size: 18),
+                  label: Text(_isTesting ? 'Menguji Printer...' : 'Tes Cetak Thermal'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: accentGreen,
+                    side: const BorderSide(color: accentGreen),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
                 ),
               ),
@@ -587,14 +523,20 @@ class _PrinterSettingsDialogState extends State<PrinterSettingsDialog> {
           ),
         ),
       ),
+      actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+      actionsAlignment: MainAxisAlignment.end,
       actions: [
-        TextButton(
+        AppButton(
+          text: 'Batal',
+          isPrimary: false,
+          width: 110,
+          height: 42,
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Batal'),
         ),
         AppButton(
           text: 'Simpan',
-          height: 40,
+          width: 110,
+          height: 42,
           onPressed: _handleSave,
         ),
       ],

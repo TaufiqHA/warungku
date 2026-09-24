@@ -44,7 +44,7 @@ Dokumen ini berfungsi sebagai katalog sentral untuk seluruh elemen dan komponen 
 | `SalesReceiptDialog` | `lib/widgets/sales_receipt_dialog.dart` | Modal preview struk kasir/penjualan dengan tombol cetak struk thermal Bluetooth/jaringan dan tombol 'Export PDF' Surat Penawaran | `transactionId`, `items`, `subtotal`, `discountAmount`, `paymentMethod`, `confirmButtonText`, `autoPrint`, `onPrint`, `showFromTransaction()`, `showFromOrderGroup()`, `showFromTransactionList()` | BerandaTab (Bayar & Cetak manual via tombol modal), PenjualanTab (Cetak Ulang manual via tombol modal) |
 | `QuotationPdfService` | `lib/services/quotation_pdf_service.dart` | Service pembuatan dan pratinjau dokumen PDF Surat Penawaran resmi A4 (Kop Warung, Header Surat Penawaran, Tabel Barang berbingkai, Rekap Total/PPN 11%/Grand Total, dan Tanda Tangan Sales) | `generateQuotationPdfBytes()`, `openOrPrintQuotationPdf()`, `formatRupiah()`, `extractDateOnly()` | Tombol 'Export PDF' pada modal `SalesReceiptDialog` (PenjualanTab & BerandaTab) |
 | `RiwayatTransaksiCard` | `lib/widgets/riwayat_transaksi_card.dart` | Kartu riwayat transaksi penjualan minimalis dengan pengelompokan multi-item per bill (`TransactionGroup`), waktu transaksi dalam zona lokal perangkat, opsi tata letak compact bergaya receipt list (`isCompact: true`), dukungan expandable inline (buka-tutup rincian item, kasir, tombol Cetak Ulang & Detail via tap), aksi swipe kiri untuk hapus, dan tap modal detail | `group`, `trx`, `onTap`, `onDelete`, `isCompact`, `isExpandable`, `initiallyExpanded`, `onPrintAgain`, `onDetail` | PenjualanTab |
-| `PrinterSettingsDialog` | `lib/widgets/printer_settings_dialog.dart` | Modal konfigurasi printer thermal (Bluetooth paired devices & Jaringan IP/Port, Kertas 58/80mm, & Tes Cetak) | `show()` | AppBar Dashboard saat tab Profil aktif (Pojok kanan atas layar Profil) |
+| `PrinterSettingsDialog` | `lib/widgets/printer_settings_dialog.dart` | Modal konfigurasi printer thermal ringkas (status satu baris, Bluetooth paired devices & Jaringan IP/Port, Kertas 58/80mm, & Tes Cetak) | `show()` | AppBar Dashboard saat tab Profil aktif (Pojok kanan atas layar Profil) |
 | `MonthlyReportScreen` | `lib/screens/report/monthly_report_screen.dart` | Layar evaluasi kinerja bulanan khusus Owner (ringkasan pesanan/omzet/AOV, ranking menu terlaris, rekap harian, cetak laporan PDF) | `initialMonth`, `initialYear` | Navigasi dari LabaRugiTab dan BerandaTab Owner |
 | `MonthlyReportPdfService` | `lib/services/monthly_report_pdf_service.dart` | Service pembentukan dan pencetakan dokumen PDF laporan bulanan resmi A4 | `generateMonthlyReportBytes()`, `printMonthlyReport()` | Tombol print App Bar di `MonthlyReportScreen` |
 | `LabaRugiPdfService` | `lib/services/laba_rugi_pdf_service.dart` | Service pembentukan dan pencetakan dokumen PDF Laporan Ringkasan Laba-Rugi resmi A4 lengkap (tabel rekap pendapatan/beban/laba bersih, rincian transaksi penjualan per item, rincian pengeluaran, dan paginasi otomatis) | `generateLabaRugiPdfBytes()`, `printLabaRugiReport()`, `formatCurrency()`, `formatTanggalCetak()` | Tombol icon 'PDF' pada header Ringkasan Laba-Rugi di `LabaRugiTab` |
@@ -68,6 +68,22 @@ Dokumen ini berfungsi sebagai katalog sentral untuk seluruh elemen dan komponen 
 ---
 
 ## 3. Log Pembuatan & Perubahan Komponen
+
+- `2026-09-24`: **Minimalisasi UI Modal Pengaturan Printer Thermal** (`lib/widgets/printer_settings_dialog.dart`, `test/thermal_print_test.dart`, `test/widget_test.dart`). Mengurangi kepadatan elemen pada modal `PrinterSettingsDialog` tanpa menghilangkan fungsi:
+  1. Kartu status 3 baris (label + nilai: "Bluetooth perangkat", "Izin akses", "Koneksi printer") diganti satu baris status ringkas (`Wrap` berisi ikon + teks: "Bluetooth aktif"/"Bluetooth nonaktif", "Izin diberikan"/"Izin belum", "Terhubung"/"Terputus").
+  2. Banner izin dipadatkan menjadi satu baris: ikon peringatan + "Izin Bluetooth diperlukan" + tombol teks "Beri Izin Bluetooth"; paragraf panduan panjang dihapus.
+  3. Label seksi "Tipe Koneksi Printer", "Konektivitas ESC/POS (LAN / WiFi / Emulator)", dan "Ukuran Kertas Thermal" dihapus (kontrol sudah menjelaskan dirinya sendiri); label "Perangkat Bluetooth Terpasang" dipersingkat menjadi "Printer Bluetooth".
+  4. Jarak antar-seksi dirapatkan (16/20 → 14).
+
+- `2026-09-24`: **Perbaikan Kerapian Tombol Modal Pengaturan Printer Thermal** (`lib/widgets/printer_settings_dialog.dart`, `test/thermal_print_test.dart`). Menyeragamkan tombol yang sebelumnya tidak konsisten tinggi/gaya:
+  1. Akar masalah: `AppButton` memiliki `width: double.infinity` bawaan, sehingga saat dipasang di `AlertDialog.actions` (yang mengukur lebar intrinsik) tombol "Simpan" melar dan "Batal" tampil tidak rapi.
+  2. Tombol aksi "Batal" & "Simpan" kini memakai `AppButton` dengan lebar tetap (`width: 110`) dan tinggi seragam (`height: 42`), plus `actionsPadding`/`actionsAlignment` eksplisit.
+  3. Tombol "Hubungkan"/"Putuskan" digabung menjadi satu tombol toggle penuh (`isPrimary` mengikuti status koneksi), menggantikan dua tombol berdampingan.
+  4. Tinggi & radius tombol diseragamkan (44 / radius 10) termasuk tombol "Tes Cetak Thermal".
+
+- `2026-09-24`: **Daftar Transaksi Per Struk (Laba Rugi) Menjadi Non-Interaktif** (`lib/screens/dashboard/tabs/laba_rugi_tab.dart`, `test/widget_test.dart`). Item pada seksi "Daftar Transaksi Per Struk" tidak lagi membuka `DetailTransaksiDialog` saat ditekan:
+  1. Wrapper `InkWell` + `onTap` dihapus, item cukup ditampilkan sebagai baris statis (nomor transaksi, status "Berhasil • <metode>", dan nominal).
+  2. Seksi "Rincian Harian" (akordeon) tetap dapat dibuka untuk melihat detail transaksi — hanya daftar per struk yang dibuat pasif.
 
 - `2026-09-23`: **Kartu Transaksi Expandable pada Halaman Penjualan Admin Toko** (`lib/widgets/riwayat_transaksi_card.dart`, `lib/screens/dashboard/tabs/penjualan_tab.dart`, `test/widget_test.dart`). Mengubah kartu riwayat transaksi kompak menjadi expandable secara inline:
   1. `RiwayatTransaksiCard` diubah menjadi `StatefulWidget` dengan state `_expanded` dan dukungan animasi `AnimatedSize` (180ms) serta rotasi ikon chevron `AnimatedRotation` (`turns: _expanded ? 0.5 : 0`).
