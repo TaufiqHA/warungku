@@ -144,6 +144,11 @@ class ThermalPrinterService {
   static const List<int> cmdFontTitle = [0x1D, 0x21, 0x11]; // Double size
   static const List<int> cmdCut = [0x1D, 0x56, 0x41, 0x03]; // GS V 65 3
   static const List<int> cmdFeed3 = [0x1B, 0x64, 0x03]; // ESC d 3
+  // Batalkan mode karakter Kanji/China (FS .) dan pilih code page Latin
+  // PC1252 (ESC t 16). Tanpa ini, byte non-ASCII yang lolos (mis. emoji)
+  // ditafsirkan printer sebagai aksara China.
+  static const List<int> cmdCancelChinese = [0x1C, 0x2E]; // FS .
+  static const List<int> cmdLatinCodePage = [0x1B, 0x74, 0x10]; // ESC t 16
 
   Future<List<BluetoothInfo>> getPairedDevices({bool requestPermission = false}) async {
     final result = await scanPairedDevices(requestPermission: requestPermission);
@@ -335,14 +340,15 @@ class ThermalPrinterService {
   /// Printer thermal umumnya memakai code page CP437/GBK secara default, sehingga
   /// byte UTF-8 multi-byte untuk karakter non-ASCII tercetak kacau. Karena ASCII
   /// identik di semua code page, karakter Latin-1 ditransliterasi (é→e, ñ→n,
-  /// tanda kutip pintar → ASCII) dan karakter tak dikenal diganti '?'.
+  /// tanda kutip pintar → ASCII) sedangkan emoji/simbol/karakter tak dikenal
+  /// dibuang agar tidak tercetak sebagai aksara China.
   static String _asciiSafe(String input) {
     final buffer = StringBuffer();
     for (final rune in input.runes) {
       if (rune < 0x80) {
         buffer.writeCharCode(rune);
       } else {
-        buffer.write(_asciiFallback[rune] ?? '?');
+        buffer.write(_asciiFallback[rune] ?? '');
       }
     }
     return buffer.toString();
@@ -445,6 +451,8 @@ class ThermalPrinterService {
     final w = config.maxCharsPerLine;
 
     bytes.addAll(cmdInit);
+    bytes.addAll(cmdCancelChinese);
+    bytes.addAll(cmdLatinCodePage);
     bytes.addAll(cmdAlignCenter);
     bytes.addAll(cmdFontTitle);
     bytes.addAll(cmdBoldOn);
@@ -490,6 +498,8 @@ class ThermalPrinterService {
     final grandTotal = (subtotal - discountAmount).clamp(0.0, double.infinity);
 
     bytes.addAll(cmdInit);
+    bytes.addAll(cmdCancelChinese);
+    bytes.addAll(cmdLatinCodePage);
 
     // Header Toko (nama + alamat dari Profil Warung)
     bytes.addAll(cmdAlignCenter);
@@ -517,7 +527,10 @@ class ThermalPrinterService {
     // Daftar Item
     for (final item in items) {
       bytes.addAll(cmdBoldOn);
-      bytes.addAll(_textToBytes('${item.name}\n'));
+      // Nama menu panjang dibungkus agar tidak terpotong di kertas.
+      for (final line in _wrapText(item.name, w)) {
+        bytes.addAll(_textToBytes('$line\n'));
+      }
       bytes.addAll(cmdBoldOff);
       final qtyPrice = '${item.quantity} x ${_formatRupiah(item.price)}';
       final itemTotal = _formatRupiah(item.subtotal);
@@ -561,6 +574,8 @@ class ThermalPrinterService {
     final dateStr = '${now.day}/${now.month}/${now.year}';
 
     bytes.addAll(cmdInit);
+    bytes.addAll(cmdCancelChinese);
+    bytes.addAll(cmdLatinCodePage);
 
     // Header Dapur
     bytes.addAll(cmdAlignCenter);
@@ -584,8 +599,11 @@ class ThermalPrinterService {
     // List Item Dapur
     for (final item in group.items) {
       bytes.addAll(cmdBoldOn);
-      final line = _twoColumns(item.namaItem, '${item.jumlah}x', w);
-      bytes.addAll(_textToBytes('$line\n'));
+      // Kuantitas dijadikan awalan agar nama menu panjang membungkus penuh
+      // (tidak terpotong) dan tidak menyisakan "1x" menggantung di baris sendiri.
+      for (final line in _wrapText('${item.jumlah}x ${item.namaItem}', w)) {
+        bytes.addAll(_textToBytes('$line\n'));
+      }
       bytes.addAll(cmdBoldOff);
       if (item.catatan.isNotEmpty) {
         bytes.addAll(_textToBytes(' * Note: ${item.catatan}\n'));

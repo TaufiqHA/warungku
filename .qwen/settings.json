@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(do *)",
+      "Bash(done)",
+      "Bash(compgen *)",
+      "Bash(python3)",
+      "Bash(import *)",
+      "Bash(print)",
+      "Bash(else *)",
+      "Bash(py)",
+      "Bash(pacman *)",
+      "Bash(ls *)"
+    ]
+  },
+  "$version": 4
+}

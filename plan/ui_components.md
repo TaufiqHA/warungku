@@ -69,6 +69,16 @@ Dokumen ini berfungsi sebagai katalog sentral untuk seluruh elemen dan komponen 
 
 ## 3. Log Pembuatan & Perubahan Komponen
 
+- `2026-09-24`: **Nama Menu Panjang Tidak Lagi Terpotong pada Struk Thermal** (`lib/services/thermal_printer_service.dart`, `test/thermal_print_test.dart`). Penyebab: `_twoColumns` versi lama memotong kolom kiri keras (`left.substring(0, width - right.length - 1)`) sehingga nama menu panjang terpangkas dan menyisakan kuantitas menempel di ujung (mis. `Udang Tumis (Taucho Pedas/Asa 1x`).
+  1. `generateSalesReceiptBytes`: nama item kini dibungkus dengan `_wrapText` mengikuti lebar kertas (32/48 kolom).
+  2. `generateKitchenReceiptBytes`: item dapur dicetak sebagai `_wrapText('${item.jumlah}x ${item.namaItem}')` — kuantitas jadi awalan sehingga nama panjang membungkus penuh dan `1x` tidak menggantung di baris sendiri.
+  3. Tes regresi: nama menu panjang dari laporan pengguna dipastikan membungkus utuh (mengandung `Goreng Tepung)`) dan tidak terpotong (`Asa 1x`).
+
+- `2026-09-24`: **Perbaikan Nama Kasir Beremoji Tercetak Sebagai Aksara China** (`lib/services/thermal_printer_service.dart`, `test/thermal_print_test.dart`). Akar masalah: emoji dikodekan UTF-8 4 byte (mis. 😀 = `F0 9F 98 80`) dan printer thermal dengan code page default GBK/CP936 menafsirkan byte ≥ 0x80 sebagai pasangan aksara China. Perbaikan dua lapis:
+  1. `_asciiSafe` kini **membuang** emoji/simbol/karakter tak dikenal (sebelumnya diganti `?`), transliterasi Latin-1 (é→e, ñ→n, tanda kutip pintar → ASCII) tetap dipertahankan, sehingga tidak ada byte UTF-8 multi-byte yang terkirim.
+  2. Setelah `cmdInit`, struk kasir/dapur/tes mencetak urutan perintah ESC/POS `FS .` (`0x1C 0x2E`, batalkan mode Kanji) dan `ESC t 16` (`0x1B 0x74 0x10`, pilih code page Latin PC1252) sebagai pengaman agar printer tidak merender byte non-ASCII sebagai aksara China.
+  3. Tes regresi: emoji pada nama kasir/kop/nama item dibuang tanpa `?`, dan byte struk dijamin bebas karakter ≥ 0x80.
+
 - `2026-09-24`: **Minimalisasi UI Modal Pengaturan Printer Thermal** (`lib/widgets/printer_settings_dialog.dart`, `test/thermal_print_test.dart`, `test/widget_test.dart`). Mengurangi kepadatan elemen pada modal `PrinterSettingsDialog` tanpa menghilangkan fungsi:
   1. Kartu status 3 baris (label + nilai: "Bluetooth perangkat", "Izin akses", "Koneksi printer") diganti satu baris status ringkas (`Wrap` berisi ikon + teks: "Bluetooth aktif"/"Bluetooth nonaktif", "Izin diberikan"/"Izin belum", "Terhubung"/"Terputus").
   2. Banner izin dipadatkan menjadi satu baris: ikon peringatan + "Izin Bluetooth diperlukan" + tombol teks "Beri Izin Bluetooth"; paragraf panduan panjang dihapus.
